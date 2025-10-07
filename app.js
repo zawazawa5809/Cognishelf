@@ -2,12 +2,26 @@
 // データモデル
 // ========================================
 
-class StorageManager {
+// ストレージインターフェース(抽象クラス)
+class StorageInterface {
+    async getAll() { throw new Error('Not implemented'); }
+    async add(item) { throw new Error('Not implemented'); }
+    async update(id, updatedData) { throw new Error('Not implemented'); }
+    async delete(id) { throw new Error('Not implemented'); }
+    async findById(id) { throw new Error('Not implemented'); }
+    generateId() {
+        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+}
+
+// LocalStorage版StorageManager(レガシー・フォールバック用)
+class StorageManager extends StorageInterface {
     constructor(key) {
+        super();
         this.key = key;
     }
 
-    getAll() {
+    async getAll() {
         const data = localStorage.getItem(this.key);
         return data ? JSON.parse(data) : [];
     }
@@ -16,8 +30,8 @@ class StorageManager {
         localStorage.setItem(this.key, JSON.stringify(items));
     }
 
-    add(item) {
-        const items = this.getAll();
+    async add(item) {
+        const items = await this.getAll();
         item.id = this.generateId();
         item.createdAt = new Date().toISOString();
         item.updatedAt = new Date().toISOString();
@@ -26,8 +40,8 @@ class StorageManager {
         return item;
     }
 
-    update(id, updatedData) {
-        const items = this.getAll();
+    async update(id, updatedData) {
+        const items = await this.getAll();
         const index = items.findIndex(item => item.id === id);
         if (index !== -1) {
             items[index] = {
@@ -41,20 +55,177 @@ class StorageManager {
         return null;
     }
 
-    delete(id) {
-        const items = this.getAll();
+    async delete(id) {
+        const items = await this.getAll();
         const filtered = items.filter(item => item.id !== id);
         this.save(filtered);
         return filtered.length < items.length;
     }
 
-    findById(id) {
-        const items = this.getAll();
+    async findById(id) {
+        const items = await this.getAll();
         return items.find(item => item.id === id);
     }
+}
 
-    generateId() {
-        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+// IndexedDB版StorageManager
+class IndexedDBManager extends StorageInterface {
+    constructor(dbName, storeName, version = 1) {
+        super();
+        this.dbName = dbName;
+        this.storeName = storeName;
+        this.version = version;
+        this.dbPromise = null;
+    }
+
+    async init() {
+        if (this.dbPromise) return this.dbPromise;
+
+        this.dbPromise = idb.openDB(this.dbName, this.version, {
+            upgrade(db, oldVersion, newVersion, transaction) {
+                // prompts Object Store
+                if (!db.objectStoreNames.contains('prompts')) {
+                    const promptStore = db.createObjectStore('prompts', { keyPath: 'id' });
+                    promptStore.createIndex('title', 'title', { unique: false });
+                    promptStore.createIndex('createdAt', 'createdAt', { unique: false });
+                    promptStore.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+                    promptStore.createIndex('folder', 'folder', { unique: false });
+                }
+
+                // contexts Object Store
+                if (!db.objectStoreNames.contains('contexts')) {
+                    const contextStore = db.createObjectStore('contexts', { keyPath: 'id' });
+                    contextStore.createIndex('title', 'title', { unique: false });
+                    contextStore.createIndex('createdAt', 'createdAt', { unique: false });
+                    contextStore.createIndex('category', 'category', { unique: false });
+                    contextStore.createIndex('folder', 'folder', { unique: false });
+                }
+
+                // folders Object Store
+                if (!db.objectStoreNames.contains('folders')) {
+                    const folderStore = db.createObjectStore('folders', { keyPath: 'id' });
+                    folderStore.createIndex('name', 'name', { unique: false });
+                    folderStore.createIndex('type', 'type', { unique: false });
+                }
+            }
+        });
+
+        return this.dbPromise;
+    }
+
+    async getAll() {
+        const db = await this.dbPromise;
+        return db.getAll(this.storeName);
+    }
+
+    async add(item) {
+        item.id = this.generateId();
+        item.createdAt = new Date().toISOString();
+        item.updatedAt = new Date().toISOString();
+
+        const db = await this.dbPromise;
+        await db.add(this.storeName, item);
+        return item;
+    }
+
+    async update(id, updatedData) {
+        const db = await this.dbPromise;
+        const item = await db.get(this.storeName, id);
+        if (!item) return null;
+
+        const newItem = {
+            ...item,
+            ...updatedData,
+            updatedAt: new Date().toISOString()
+        };
+        await db.put(this.storeName, newItem);
+        return newItem;
+    }
+
+    async delete(id) {
+        const db = await this.dbPromise;
+        await db.delete(this.storeName, id);
+        return true;
+    }
+
+    async findById(id) {
+        const db = await this.dbPromise;
+        return db.get(this.storeName, id);
+    }
+
+    // 高度な検索メソッド(オプション)
+    async findByTag(tag) {
+        const db = await this.dbPromise;
+        const index = db.transaction(this.storeName).objectStore(this.storeName).index('tags');
+        return index.getAll(tag);
+    }
+
+    async findByDateRange(startDate, endDate) {
+        const db = await this.dbPromise;
+        const index = db.transaction(this.storeName).objectStore(this.storeName).index('createdAt');
+        const range = IDBKeyRange.bound(startDate, endDate);
+        return index.getAll(range);
+    }
+}
+
+// ========================================
+// ストレージアダプター
+// ========================================
+
+class StorageAdapter {
+    static async createManager(storeName, legacyKey) {
+        // IndexedDB対応チェック
+        if ('indexedDB' in window && typeof idb !== 'undefined') {
+            try {
+                const manager = new IndexedDBManager('cognishelf-db', storeName, 1);
+                await manager.init();
+
+                // LocalStorageからマイグレーション
+                await this.migrateFromLocalStorage(manager, legacyKey);
+
+                return manager;
+            } catch (error) {
+                console.error(`IndexedDB initialization failed for ${storeName}:`, error);
+                console.warn(`Falling back to LocalStorage for ${storeName}`);
+                return new StorageManager(legacyKey);
+            }
+        } else {
+            console.warn('IndexedDB not supported. Using LocalStorage.');
+            return new StorageManager(legacyKey);
+        }
+    }
+
+    static async migrateFromLocalStorage(idbManager, legacyKey) {
+        const oldData = localStorage.getItem(legacyKey);
+        if (!oldData) return;
+
+        console.log(`Migrating data from LocalStorage (${legacyKey}) to IndexedDB...`);
+
+        try {
+            const items = JSON.parse(oldData);
+            const db = await idbManager.dbPromise;
+
+            // トランザクションでまとめて移行
+            const tx = db.transaction(idbManager.storeName, 'readwrite');
+            const store = tx.objectStore(idbManager.storeName);
+
+            for (const item of items) {
+                // 既存データが存在しない場合のみ追加
+                const existing = await store.get(item.id);
+                if (!existing) {
+                    await store.add(item);
+                }
+            }
+
+            await tx.done;
+
+            // 移行完了後にLocalStorageクリア
+            localStorage.removeItem(legacyKey);
+            console.log(`Migration completed for ${legacyKey}`);
+        } catch (error) {
+            console.error(`Migration failed for ${legacyKey}:`, error);
+            // エラーが発生してもLocalStorageは残しておく
+        }
     }
 }
 
@@ -64,9 +235,10 @@ class StorageManager {
 
 class CognishelfApp {
     constructor() {
-        this.promptsManager = new StorageManager('cognishelf-prompts');
-        this.contextsManager = new StorageManager('cognishelf-contexts');
-        this.foldersManager = new StorageManager('cognishelf-folders');
+        // ストレージマネージャーは init() で非同期初期化する
+        this.promptsManager = null;
+        this.contextsManager = null;
+        this.foldersManager = null;
         this.currentTab = 'prompts';
         this.editingItem = null;
         this.editingType = null;
@@ -76,44 +248,53 @@ class CognishelfApp {
         this.currentContextFolder = null;
         this.previewItem = null;
         this.previewType = null;
-
-        this.init();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.initializeSampleData();
-        this.renderFolders('prompt');
-        this.renderFolders('context');
-        this.renderPrompts();
-        this.renderContexts();
+    async init() {
+        try {
+            // ストレージマネージャーの初期化
+            this.promptsManager = await StorageAdapter.createManager('prompts', 'cognishelf-prompts');
+            this.contextsManager = await StorageAdapter.createManager('contexts', 'cognishelf-contexts');
+            this.foldersManager = await StorageAdapter.createManager('folders', 'cognishelf-folders');
+
+            this.setupEventListeners();
+            await this.initializeSampleData();
+            await this.renderFolders('prompt');
+            await this.renderFolders('context');
+            await this.renderPrompts();
+            await this.renderContexts();
+
+            console.log('Cognishelf initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize Cognishelf:', error);
+            this.showToast('アプリケーションの初期化に失敗しました', 'error');
+        }
     }
 
-    initializeSampleData() {
+    async initializeSampleData() {
         // サンプルデータを追加(初回のみ)
-        if (this.promptsManager.getAll().length === 0) {
-            this.promptsManager.add({
+        const prompts = await this.promptsManager.getAll();
+        if (prompts.length === 0) {
+            await this.promptsManager.add({
                 title: '要約プロンプト',
                 content: '以下のテキストを3つの要点にまとめてください:\n\n[テキストをここに貼り付け]',
                 tags: ['要約', '分析']
             });
-            this.promptsManager.add({
+            await this.promptsManager.add({
                 title: 'コード説明',
                 content: '以下のコードを詳しく解説してください。各行の役割と全体の動作を説明してください:\n\n```\n[コードをここに貼り付け]\n```',
                 tags: ['プログラミング', '解説']
             });
         }
 
-        if (this.contextsManager.getAll().length === 0) {
-            this.contextsManager.add({
+        const contexts = await this.contextsManager.getAll();
+        if (contexts.length === 0) {
+            await this.contextsManager.add({
                 title: 'プロジェクト概要',
                 content: 'このプロジェクトは、プロンプトエンジニアリングとコンテキストエンジニアリングを組み合わせたツールです。\n\n主な機能:\n- プロンプトの保存と管理\n- コンテキストの蓄積\n- ワンクリックコピー',
                 category: 'プロジェクト'
             });
         }
-
-        this.renderPrompts();
-        this.renderContexts();
     }
 
     setupEventListeners() {
@@ -258,8 +439,8 @@ class CognishelfApp {
         return sorted;
     }
 
-    renderPrompts(items = null) {
-        let prompts = items || this.promptsManager.getAll();
+    async renderPrompts(items = null) {
+        let prompts = items || await this.promptsManager.getAll();
 
         // フォルダフィルタ適用
         if (this.currentPromptFolder === 'uncategorized') {
@@ -305,13 +486,13 @@ class CognishelfApp {
         `;
     }
 
-    openPromptModal(promptId = null) {
+    async openPromptModal(promptId = null) {
         const modal = document.getElementById('prompt-modal');
         const title = document.getElementById('prompt-modal-title');
         const form = document.getElementById('prompt-form');
 
         if (promptId) {
-            const prompt = this.promptsManager.findById(promptId);
+            const prompt = await this.promptsManager.findById(promptId);
             if (prompt) {
                 title.textContent = 'プロンプトを編集';
                 document.getElementById('prompt-title').value = prompt.title;
@@ -320,7 +501,7 @@ class CognishelfApp {
 
                 // フォルダ名取得
                 if (prompt.folder) {
-                    const folder = this.foldersManager.findById(prompt.folder);
+                    const folder = await this.foldersManager.findById(prompt.folder);
                     document.getElementById('prompt-folder').value = folder ? folder.name : '';
                 } else {
                     document.getElementById('prompt-folder').value = '';
@@ -338,7 +519,7 @@ class CognishelfApp {
         modal.classList.add('active');
     }
 
-    savePrompt() {
+    async savePrompt() {
         const title = document.getElementById('prompt-title').value.trim();
         const content = document.getElementById('prompt-content').value.trim();
         const tagsInput = document.getElementById('prompt-tags').value.trim();
@@ -354,25 +535,25 @@ class CognishelfApp {
 
         // フォルダ処理
         if (folderName) {
-            const folder = this.getOrCreateFolder(folderName, 'prompt');
+            const folder = await this.getOrCreateFolder(folderName, 'prompt');
             promptData.folder = folder.id;
         }
 
         if (this.editingItem) {
-            this.promptsManager.update(this.editingItem, promptData);
+            await this.promptsManager.update(this.editingItem, promptData);
             this.showToast('プロンプトを更新しました', 'success');
         } else {
-            this.promptsManager.add(promptData);
+            await this.promptsManager.add(promptData);
             this.showToast('プロンプトを追加しました', 'success');
         }
 
-        this.renderFolders('prompt');
-        this.renderPrompts();
+        await this.renderFolders('prompt');
+        await this.renderPrompts();
         this.closeAllModals();
     }
 
-    searchPrompts(query) {
-        const prompts = this.promptsManager.getAll();
+    async searchPrompts(query) {
+        const prompts = await this.promptsManager.getAll();
         const filtered = prompts.filter(prompt => {
             const searchStr = `${prompt.title} ${prompt.content} ${prompt.tags?.join(' ')}`.toLowerCase();
             return searchStr.includes(query.toLowerCase());
@@ -384,8 +565,8 @@ class CognishelfApp {
     // コンテキスト管理
     // ========================================
 
-    renderContexts(items = null) {
-        let contexts = items || this.contextsManager.getAll();
+    async renderContexts(items = null) {
+        let contexts = items || await this.contextsManager.getAll();
 
         // フォルダフィルタ適用
         if (this.currentContextFolder === 'uncategorized') {
@@ -431,13 +612,13 @@ class CognishelfApp {
         `;
     }
 
-    openContextModal(contextId = null) {
+    async openContextModal(contextId = null) {
         const modal = document.getElementById('context-modal');
         const title = document.getElementById('context-modal-title');
         const form = document.getElementById('context-form');
 
         if (contextId) {
-            const context = this.contextsManager.findById(contextId);
+            const context = await this.contextsManager.findById(contextId);
             if (context) {
                 title.textContent = 'コンテキストを編集';
                 document.getElementById('context-title').value = context.title;
@@ -446,7 +627,7 @@ class CognishelfApp {
 
                 // フォルダ名取得
                 if (context.folder) {
-                    const folder = this.foldersManager.findById(context.folder);
+                    const folder = await this.foldersManager.findById(context.folder);
                     document.getElementById('context-folder').value = folder ? folder.name : '';
                 } else {
                     document.getElementById('context-folder').value = '';
@@ -464,7 +645,7 @@ class CognishelfApp {
         modal.classList.add('active');
     }
 
-    saveContext() {
+    async saveContext() {
         const title = document.getElementById('context-title').value.trim();
         const content = document.getElementById('context-content').value.trim();
         const category = document.getElementById('context-category').value.trim();
@@ -479,25 +660,25 @@ class CognishelfApp {
 
         // フォルダ処理
         if (folderName) {
-            const folder = this.getOrCreateFolder(folderName, 'context');
+            const folder = await this.getOrCreateFolder(folderName, 'context');
             contextData.folder = folder.id;
         }
 
         if (this.editingItem) {
-            this.contextsManager.update(this.editingItem, contextData);
+            await this.contextsManager.update(this.editingItem, contextData);
             this.showToast('コンテキストを更新しました', 'success');
         } else {
-            this.contextsManager.add(contextData);
+            await this.contextsManager.add(contextData);
             this.showToast('コンテキストを追加しました', 'success');
         }
 
-        this.renderFolders('context');
-        this.renderContexts();
+        await this.renderFolders('context');
+        await this.renderContexts();
         this.closeAllModals();
     }
 
-    searchContexts(query) {
-        const contexts = this.contextsManager.getAll();
+    async searchContexts(query) {
+        const contexts = await this.contextsManager.getAll();
         const filtered = contexts.filter(context => {
             const searchStr = `${context.title} ${context.content} ${context.category || ''}`.toLowerCase();
             return searchStr.includes(query.toLowerCase());
@@ -509,17 +690,17 @@ class CognishelfApp {
     // 共通機能
     // ========================================
 
-    getFolders(type) {
-        const allFolders = this.foldersManager.getAll();
+    async getFolders(type) {
+        const allFolders = await this.foldersManager.getAll();
         return allFolders.filter(f => f.type === type);
     }
 
-    getOrCreateFolder(name, type) {
-        const folders = this.getFolders(type);
+    async getOrCreateFolder(name, type) {
+        const folders = await this.getFolders(type);
         let folder = folders.find(f => f.name === name);
 
         if (!folder) {
-            folder = this.foldersManager.add({ name, type });
+            folder = await this.foldersManager.add({ name, type });
         }
 
         return folder;
@@ -530,8 +711,8 @@ class CognishelfApp {
         return items.filter(item => item.folder === folderId);
     }
 
-    renderFolders(type) {
-        const folders = this.getFolders(type);
+    async renderFolders(type) {
+        const folders = await this.getFolders(type);
         const containerId = type === 'prompt' ? 'prompt-folders' : 'context-folders';
         const container = document.getElementById(containerId);
 
@@ -601,9 +782,9 @@ class CognishelfApp {
         });
     }
 
-    copyToClipboard(id, type) {
+    async copyToClipboard(id, type) {
         const manager = type === 'prompt' ? this.promptsManager : this.contextsManager;
-        const item = manager.findById(id);
+        const item = await manager.findById(id);
 
         if (item) {
             navigator.clipboard.writeText(item.content)
@@ -616,29 +797,29 @@ class CognishelfApp {
         }
     }
 
-    deleteItem(id, type) {
+    async deleteItem(id, type) {
         if (!confirm('本当に削除しますか?')) {
             return;
         }
 
         const manager = type === 'prompt' ? this.promptsManager : this.contextsManager;
-        const success = manager.delete(id);
+        const success = await manager.delete(id);
 
         if (success) {
             this.showToast('削除しました', 'success');
             if (type === 'prompt') {
-                this.renderPrompts();
+                await this.renderPrompts();
             } else {
-                this.renderContexts();
+                await this.renderContexts();
             }
         } else {
             this.showToast('削除に失敗しました', 'error');
         }
     }
 
-    openPreviewModal(id, type) {
+    async openPreviewModal(id, type) {
         const manager = type === 'prompt' ? this.promptsManager : this.contextsManager;
-        const item = manager.findById(id);
+        const item = await manager.findById(id);
 
         if (!item) return;
 
@@ -666,7 +847,7 @@ class CognishelfApp {
         }
 
         if (item.folder) {
-            const folder = this.foldersManager.findById(item.folder);
+            const folder = await this.foldersManager.findById(item.folder);
             if (folder) {
                 metaInfo.push(`フォルダ: ${folder.name}`);
             }
@@ -767,6 +948,7 @@ class CognishelfApp {
 // アプリケーション起動
 // ========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     window.app = new CognishelfApp();
+    await window.app.init();
 });

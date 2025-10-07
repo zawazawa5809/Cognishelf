@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-**Cognishelf** は、プロンプトエンジニアリングとコンテキストエンジニアリングを統合したWebアプリケーションです。フレームワーク不要の純粋なHTML/CSS/JavaScriptで構築されたSPA(Single Page Application)で、ブラウザのLocalStorageを使用してデータを永続化します。
+**Cognishelf** は、プロンプトエンジニアリングとコンテキストエンジニアリングを統合したWebアプリケーションです。フレームワーク不要の純粋なHTML/CSS/JavaScriptで構築されたSPA(Single Page Application)で、ブラウザの**IndexedDB**を使用してデータを永続化します(LocalStorageからの自動マイグレーション対応)。
 
 ## 基本操作
 
@@ -30,20 +30,43 @@ npx http-server -p 8000
 
 ### ファイル構造
 - **[index.html](index.html)**: アプリケーションのメインHTML - モーダルダイアログとタブUIを含む
+  - idbライブラリ(IndexedDBラッパー)を CDN経由で読み込み
 - **[app.js](app.js)**: アプリケーションロジック全体 - クラスベース設計
 - **[styles.css](styles.css)**: プロフェッショナルなコーポレート風デザイン
 
-### データ管理 - StorageManager (app.js:5-59)
+### データ管理アーキテクチャ
 
-汎用的なLocalStorage CRUDマネージャークラス。プロンプトとコンテキストの両方で使用されます。
+#### ストレージ抽象化層 (app.js:5-169)
 
-**主要メソッド:**
-- `getAll()`: 全データ取得
-- `add(item)`: 自動ID生成・タイムスタンプ付きで追加
-- `update(id, data)`: 指定IDのデータ更新
-- `delete(id)`: 指定IDのデータ削除
-- `findById(id)`: ID検索
+**StorageInterface (抽象クラス)**
+- すべてのストレージマネージャーの共通インターフェース
+- 非同期メソッド: `getAll()`, `add()`, `update()`, `delete()`, `findById()`
 - `generateId()`: ユニークIDを `timestamp-randomString` 形式で生成
+
+**StorageManager (LocalStorage実装)**
+- レガシー実装・フォールバック用
+- IndexedDB非対応ブラウザで自動的に使用される
+
+**IndexedDBManager (IndexedDB実装)** ⭐️ メイン実装
+- Google製`idb`ライブラリを使用したPromiseベースの実装
+- データベース名: `cognishelf-db`
+- Object Stores: `prompts`, `contexts`, `folders`
+- インデックス:
+  - prompts: `title`, `createdAt`, `tags`(multiEntry), `folder`
+  - contexts: `title`, `createdAt`, `category`, `folder`
+  - folders: `name`, `type`
+- 高度な検索メソッド:
+  - `findByTag(tag)`: タグによるインデックス検索
+  - `findByDateRange(start, end)`: 日付範囲検索
+
+**StorageAdapter (app.js:175-230)**
+- ストレージマネージャーの自動選択・初期化を担当
+- `createManager(storeName, legacyKey)`:
+  1. IndexedDB対応チェック
+  2. IndexedDBManager初期化
+  3. LocalStorageからの自動マイグレーション
+  4. エラー時はLocalStorageへフォールバック
+- `migrateFromLocalStorage()`: 既存データを移行後にLocalStorageクリア
 
 **データ構造:**
 ```javascript
@@ -58,16 +81,22 @@ npx http-server -p 8000
 }
 ```
 
-### アプリケーション状態 - CognishelfApp (app.js:65-523)
+### アプリケーション状態 - CognishelfApp (app.js:236-948)
 
 メインアプリケーションクラス。SPA全体の状態とUIを管理します。
 
 **状態管理:**
-- `promptsManager`: プロンプト用StorageManager
-- `contextsManager`: コンテキスト用StorageManager
+- `promptsManager`: プロンプト用ストレージマネージャー(IndexedDB/LocalStorage)
+- `contextsManager`: コンテキスト用ストレージマネージャー
+- `foldersManager`: フォルダ用ストレージマネージャー
 - `currentTab`: 'prompts' または 'contexts'
 - `editingItem`: 編集中のアイテムID (null = 新規作成モード)
 - `editingType`: 'prompt' または 'context'
+
+**重要な設計変更:**
+- すべてのデータ操作メソッドが**非同期(async/await)**に変更されています
+- `init()` は非同期初期化メソッドで、DOMContentLoaded時に`await app.init()`で呼び出されます
+- ストレージマネージャーは`StorageAdapter.createManager()`で初期化され、自動的にIndexedDBまたはLocalStorageが選択されます
 
 **主要機能ブロック:**
 
@@ -115,9 +144,10 @@ npx http-server -p 8000
 
 ### JavaScript
 - クラスベース設計を維持
+- **非同期処理**: すべてのデータ操作は`async/await`で実装
 - イベントリスナーは初期化時に `setupEventListeners()` で一括登録
 - DOM操作は必ずXSS対策を実施 (`escapeHtml()` 使用)
-- LocalStorage操作は `StorageManager` を経由
+- ストレージ操作は `StorageInterface` 実装クラス(IndexedDBManager/StorageManager)を経由
 
 ### CSS
 - CSS変数 (`--primary-*`, `--accent-*`) でカラーパレット管理
@@ -126,23 +156,54 @@ npx http-server -p 8000
 
 ### セキュリティ
 - **XSS対策必須**: ユーザー入力を表示する際は必ず `escapeHtml()` を使用
-- LocalStorageのデータはクライアント側のみ - 外部送信なし
+- IndexedDB/LocalStorageのデータはクライアント側のみ - 外部送信なし
 
 ## データ永続化
 
+### IndexedDB (メインストレージ)
+
+**データベース構成:**
+- データベース名: `cognishelf-db` (バージョン: 1)
+- Object Stores: `prompts`, `contexts`, `folders`
+- 容量制限: 数百MB～数GB (ブラウザ依存)
+
+**マイグレーション:**
+- 初回起動時、LocalStorageに既存データがあれば自動的にIndexedDBへ移行
+- 移行完了後、LocalStorageのデータはクリアされます
+- マイグレーション中のエラーはコンソールに記録され、LocalStorageデータは保持されます
+
+**フォールバック:**
+- IndexedDB非対応ブラウザでは自動的にLocalStorageを使用
+- IndexedDB初期化失敗時もLocalStorageへフォールバック
+
+### LocalStorage (レガシー・フォールバック用)
+
 **LocalStorageキー:**
-- `cognishelf-prompts`: プロンプトデータ配列
+- `cognishelf-prompts`: プロンプトデータ配列 (最大5-10MB)
 - `cognishelf-contexts`: コンテキストデータ配列
+- `cognishelf-folders`: フォルダデータ配列
 
 **初期サンプルデータ:**
 初回起動時のみ `initializeSampleData()` でサンプルデータを自動追加します。既存データがある場合はスキップされます。
 
+## ブラウザ要件
+
+- **IndexedDB対応ブラウザ** (推奨)
+  - Chrome 24+
+  - Firefox 16+
+  - Safari 10+
+  - Edge 12+
+  - すべてのモダンモバイルブラウザ
+- IndexedDB非対応の場合は自動的にLocalStorageにフォールバック
+
 ## 今後の拡張予定 (README参照)
 
+- ✅ ~~IndexedDB対応~~ (完了)
+- ✅ ~~フォルダ/グループ機能~~ (完了)
+- ✅ ~~Markdown対応~~ (完了)
+- ✅ ~~ソート機能 (日付・タイトル)~~ (完了)
 - データのインポート/エクスポート (JSON)
 - お気に入り機能
-- ソート機能 (日付・タイトル)
-- フォルダ/グループ機能
-- Markdown対応
 - ダークモードテーマ
 - キーボードショートカット拡張
+- タグ/カテゴリによる高度な検索機能(IndexedDBインデックス活用)
