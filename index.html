@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognishelf - プロンプト&コンテキストギャラリー</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>Cognishelf</h1>
+            <p class="subtitle">プロンプト&コンテキストギャラリー</p>
+        </header>
+
+        <main class="main-container">
+            <!-- タブナビゲーション -->
+            <nav class="tabs">
+                <button class="tab-button active" data-tab="prompts">
+                    プロンプト
+                </button>
+                <button class="tab-button" data-tab="contexts">
+                    コンテキスト
+                </button>
+            </nav>
+
+            <!-- プロンプトギャラリー -->
+            <section id="prompts-section" class="content-section active">
+                <div class="section-header">
+                    <h2>プロンプトギャラリー</h2>
+                    <button class="btn btn-primary" id="add-prompt-btn">+ 新規プロンプト</button>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" id="prompt-search" placeholder="プロンプトを検索...">
+                </div>
+
+                <div id="prompts-grid" class="items-grid">
+                    <!-- プロンプトカードがここに動的に追加されます -->
+                </div>
+            </section>
+
+            <!-- コンテキストギャラリー -->
+            <section id="contexts-section" class="content-section">
+                <div class="section-header">
+                    <h2>コンテキストギャラリー</h2>
+                    <button class="btn btn-primary" id="add-context-btn">+ 新規コンテキスト</button>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" id="context-search" placeholder="コンテキストを検索...">
+                </div>
+
+                <div id="contexts-grid" class="items-grid">
+                    <!-- コンテキストカードがここに動的に追加されます -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- モーダル: プロンプト編集 -->
+    <div id="prompt-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="prompt-modal-title">プロンプトを追加</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="prompt-form">
+                    <div class="form-group">
+                        <label for="prompt-title">タイトル</label>
+                        <input type="text" id="prompt-title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-content">プロンプト内容</label>
+                        <textarea id="prompt-content" rows="8" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-tags">タグ (カンマ区切り)</label>
+                        <input type="text" id="prompt-tags" placeholder="例: AI, 分析, 要約">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: コンテキスト編集 -->
+    <div id="context-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="context-modal-title">コンテキストを追加</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="context-form">
+                    <div class="form-group">
+                        <label for="context-title">タイトル</label>
+                        <input type="text" id="context-title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="context-content">コンテキスト内容</label>
+                        <textarea id="context-content" rows="10" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="context-category">カテゴリ</label>
+                        <input type="text" id="context-category" placeholder="例: 技術知識, ビジネス, デザイン">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
