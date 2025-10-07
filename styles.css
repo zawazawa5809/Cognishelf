@@ -294,6 +294,83 @@ body::before {
     animation: fadeInScale 0.3s ease-out;
 }
 
+.content-with-sidebar {
+    display: flex;
+    gap: var(--spacing-xl);
+}
+
+/* ========================================
+   フォルダサイドバー
+   ======================================== */
+
+.folders-sidebar {
+    flex-shrink: 0;
+    width: 220px;
+    background: var(--neutral-0);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+    border: var(--border-width) solid var(--border-color);
+    height: fit-content;
+    position: sticky;
+    top: var(--spacing-xl);
+}
+
+.sidebar-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--neutral-700);
+    margin-bottom: var(--spacing-md);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.folders-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.folder-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    margin-bottom: var(--spacing-xs);
+    color: var(--neutral-700);
+    font-size: 0.9375rem;
+}
+
+.folder-item:hover {
+    background: var(--neutral-100);
+}
+
+.folder-item.active {
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font-weight: 500;
+}
+
+.folder-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.folder-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.content-main {
+    flex: 1;
+    min-width: 0;
+}
+
 @keyframes fadeInScale {
     from {
         opacity: 0;
@@ -328,9 +405,21 @@ body::before {
    検索ボックス - Professional Input
    ======================================== */
 
-.search-box {
+/* ========================================
+   ツールバー
+   ======================================== */
+
+.toolbar {
+    display: flex;
+    gap: var(--spacing-md);
     margin-bottom: var(--spacing-xl);
+    align-items: center;
+}
+
+.search-box {
+    flex: 1;
     position: relative;
+    min-width: 200px;
 }
 
 .search-box::before {
@@ -371,6 +460,34 @@ body::before {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), var(--shadow-sm);
     background: var(--neutral-0);
+}
+
+.sort-box {
+    flex-shrink: 0;
+}
+
+.sort-select {
+    padding: var(--spacing-lg) var(--spacing-xl);
+    font-size: 0.9375rem;
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--neutral-0);
+    color: var(--neutral-700);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow: var(--shadow-xs);
+    font-weight: 500;
+    min-width: 180px;
+}
+
+.sort-select:hover {
+    border-color: var(--border-hover);
+}
+
+.sort-select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), var(--shadow-sm);
 }
 
 /* ========================================
@@ -472,6 +589,75 @@ body::before {
     -webkit-line-clamp: 5;
     -webkit-box-orient: vertical;
     position: relative;
+}
+
+/* Markdownコンテンツスタイル */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    color: var(--neutral-800);
+    margin-top: 0.75em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+}
+
+.markdown-content h1 { font-size: 1.25rem; }
+.markdown-content h2 { font-size: 1.125rem; }
+.markdown-content h3 { font-size: 1rem; }
+
+.markdown-content p {
+    margin-bottom: 0.75em;
+}
+
+.markdown-content code {
+    background: var(--neutral-100);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: var(--accent-700);
+}
+
+.markdown-content pre {
+    background: var(--neutral-900);
+    color: var(--neutral-100);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+    margin-bottom: 0.75em;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.markdown-content blockquote {
+    border-left: 3px solid var(--accent-400);
+    padding-left: var(--spacing-md);
+    margin: 0.75em 0;
+    color: var(--neutral-600);
+    font-style: italic;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-left: 1.5em;
+    margin-bottom: 0.75em;
+}
+
+.markdown-content li {
+    margin-bottom: 0.25em;
+}
+
+.markdown-content a {
+    color: var(--accent-600);
+    text-decoration: none;
+}
+
+.markdown-content a:hover {
+    text-decoration: underline;
 }
 
 .card-tags {
@@ -651,6 +837,10 @@ body::before {
     position: relative;
 }
 
+.modal-content-large {
+    max-width: 900px;
+}
+
 /* スクロールバーのスタイリング */
 .modal-content::-webkit-scrollbar {
     width: 8px;
@@ -725,6 +915,43 @@ body::before {
 
 .modal-body {
     padding: var(--spacing-xl);
+}
+
+.modal-footer {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+    padding: var(--spacing-xl);
+    border-top: var(--border-width) solid var(--border-color);
+    background: var(--neutral-50);
+}
+
+/* プレビュー専用スタイル */
+.preview-meta {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--neutral-100);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    color: var(--neutral-600);
+    flex-wrap: wrap;
+}
+
+.preview-content {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--neutral-800);
+    max-height: none;
+    overflow: visible;
+}
+
+.preview-content h1:first-child,
+.preview-content h2:first-child,
+.preview-content h3:first-child,
+.preview-content p:first-child {
+    margin-top: 0;
 }
 
 /* ========================================
@@ -941,6 +1168,29 @@ body::before {
 
     .subtitle {
         font-size: 1rem;
+    }
+
+    .content-with-sidebar {
+        flex-direction: column;
+    }
+
+    .folders-sidebar {
+        width: 100%;
+        position: static;
+    }
+
+    .toolbar {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .search-box,
+    .sort-box {
+        width: 100%;
+    }
+
+    .sort-select {
+        width: 100%;
     }
 
     .items-grid {

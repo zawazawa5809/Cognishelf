@@ -66,18 +66,27 @@ class CognishelfApp {
     constructor() {
         this.promptsManager = new StorageManager('cognishelf-prompts');
         this.contextsManager = new StorageManager('cognishelf-contexts');
+        this.foldersManager = new StorageManager('cognishelf-folders');
         this.currentTab = 'prompts';
         this.editingItem = null;
         this.editingType = null;
+        this.currentPromptSort = 'date-desc';
+        this.currentContextSort = 'date-desc';
+        this.currentPromptFolder = null; // null = 全表示
+        this.currentContextFolder = null;
+        this.previewItem = null;
+        this.previewType = null;
 
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        this.initializeSampleData();
+        this.renderFolders('prompt');
+        this.renderFolders('context');
         this.renderPrompts();
         this.renderContexts();
-        this.initializeSampleData();
     }
 
     initializeSampleData() {
@@ -160,6 +169,46 @@ class CognishelfApp {
             this.searchContexts(e.target.value);
         });
 
+        // ソート機能
+        document.getElementById('prompt-sort').addEventListener('change', (e) => {
+            this.currentPromptSort = e.target.value;
+            this.renderPrompts();
+        });
+
+        document.getElementById('context-sort').addEventListener('change', (e) => {
+            this.currentContextSort = e.target.value;
+            this.renderContexts();
+        });
+
+        // プレビューモーダルのボタン
+        document.getElementById('preview-copy-btn').addEventListener('click', () => {
+            if (this.previewItem) {
+                this.copyToClipboard(this.previewItem, this.previewType);
+            }
+        });
+
+        document.getElementById('preview-edit-btn').addEventListener('click', () => {
+            if (this.previewItem) {
+                const itemId = this.previewItem;
+                const itemType = this.previewType;
+                this.closeAllModals();
+                if (itemType === 'prompt') {
+                    this.openPromptModal(itemId);
+                } else {
+                    this.openContextModal(itemId);
+                }
+            }
+        });
+
+        document.getElementById('preview-delete-btn').addEventListener('click', () => {
+            if (this.previewItem) {
+                const itemId = this.previewItem;
+                const itemType = this.previewType;
+                this.closeAllModals();
+                this.deleteItem(itemId, itemType);
+            }
+        });
+
         // キーボードショートカット
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -186,8 +235,41 @@ class CognishelfApp {
     // プロンプト管理
     // ========================================
 
+    sortItems(items, sortBy) {
+        const sorted = [...items];
+
+        switch (sortBy) {
+            case 'date-desc':
+                sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                break;
+            case 'date-asc':
+                sorted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+                break;
+            case 'title-asc':
+                sorted.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+                break;
+            case 'title-desc':
+                sorted.sort((a, b) => b.title.localeCompare(a.title, 'ja'));
+                break;
+            default:
+                break;
+        }
+
+        return sorted;
+    }
+
     renderPrompts(items = null) {
-        const prompts = items || this.promptsManager.getAll();
+        let prompts = items || this.promptsManager.getAll();
+
+        // フォルダフィルタ適用
+        if (this.currentPromptFolder === 'uncategorized') {
+            prompts = prompts.filter(p => !p.folder);
+        } else if (this.currentPromptFolder) {
+            prompts = this.filterByFolder(prompts, this.currentPromptFolder);
+        }
+
+        prompts = this.sortItems(prompts, this.currentPromptSort);
+
         const grid = document.getElementById('prompts-grid');
 
         if (prompts.length === 0) {
@@ -212,17 +294,11 @@ class CognishelfApp {
                     <h3 class="card-title">${this.escapeHtml(prompt.title)}</h3>
                     <div class="card-meta">${this.formatDate(prompt.createdAt)}</div>
                 </div>
-                <div class="card-content">${this.escapeHtml(prompt.content)}</div>
+                <div class="card-content markdown-content">${this.renderMarkdown(prompt.content)}</div>
                 ${tags ? `<div class="card-tags">${tags}</div>` : ''}
                 <div class="card-actions">
                     <button class="btn btn-small btn-success copy-btn" data-id="${prompt.id}" data-type="prompt">
                         コピー
-                    </button>
-                    <button class="btn btn-small btn-secondary edit-btn" data-id="${prompt.id}" data-type="prompt">
-                        編集
-                    </button>
-                    <button class="btn btn-small btn-danger delete-btn" data-id="${prompt.id}" data-type="prompt">
-                        削除
                     </button>
                 </div>
             </div>
@@ -241,6 +317,15 @@ class CognishelfApp {
                 document.getElementById('prompt-title').value = prompt.title;
                 document.getElementById('prompt-content').value = prompt.content;
                 document.getElementById('prompt-tags').value = prompt.tags ? prompt.tags.join(', ') : '';
+
+                // フォルダ名取得
+                if (prompt.folder) {
+                    const folder = this.foldersManager.findById(prompt.folder);
+                    document.getElementById('prompt-folder').value = folder ? folder.name : '';
+                } else {
+                    document.getElementById('prompt-folder').value = '';
+                }
+
                 this.editingItem = promptId;
             }
         } else {
@@ -258,6 +343,7 @@ class CognishelfApp {
         const content = document.getElementById('prompt-content').value.trim();
         const tagsInput = document.getElementById('prompt-tags').value.trim();
         const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+        const folderName = document.getElementById('prompt-folder').value.trim();
 
         if (!title || !content) {
             this.showToast('タイトルと内容は必須です', 'error');
@@ -265,6 +351,12 @@ class CognishelfApp {
         }
 
         const promptData = { title, content, tags };
+
+        // フォルダ処理
+        if (folderName) {
+            const folder = this.getOrCreateFolder(folderName, 'prompt');
+            promptData.folder = folder.id;
+        }
 
         if (this.editingItem) {
             this.promptsManager.update(this.editingItem, promptData);
@@ -274,6 +366,7 @@ class CognishelfApp {
             this.showToast('プロンプトを追加しました', 'success');
         }
 
+        this.renderFolders('prompt');
         this.renderPrompts();
         this.closeAllModals();
     }
@@ -292,7 +385,17 @@ class CognishelfApp {
     // ========================================
 
     renderContexts(items = null) {
-        const contexts = items || this.contextsManager.getAll();
+        let contexts = items || this.contextsManager.getAll();
+
+        // フォルダフィルタ適用
+        if (this.currentContextFolder === 'uncategorized') {
+            contexts = contexts.filter(c => !c.folder);
+        } else if (this.currentContextFolder) {
+            contexts = this.filterByFolder(contexts, this.currentContextFolder);
+        }
+
+        contexts = this.sortItems(contexts, this.currentContextSort);
+
         const grid = document.getElementById('contexts-grid');
 
         if (contexts.length === 0) {
@@ -317,17 +420,11 @@ class CognishelfApp {
                     <h3 class="card-title">${this.escapeHtml(context.title)}</h3>
                     <div class="card-meta">${this.formatDate(context.createdAt)}</div>
                 </div>
-                <div class="card-content">${this.escapeHtml(context.content)}</div>
+                <div class="card-content markdown-content">${this.renderMarkdown(context.content)}</div>
                 ${category ? `<div class="card-tags">${category}</div>` : ''}
                 <div class="card-actions">
                     <button class="btn btn-small btn-success copy-btn" data-id="${context.id}" data-type="context">
                         コピー
-                    </button>
-                    <button class="btn btn-small btn-secondary edit-btn" data-id="${context.id}" data-type="context">
-                        編集
-                    </button>
-                    <button class="btn btn-small btn-danger delete-btn" data-id="${context.id}" data-type="context">
-                        削除
                     </button>
                 </div>
             </div>
@@ -346,6 +443,15 @@ class CognishelfApp {
                 document.getElementById('context-title').value = context.title;
                 document.getElementById('context-content').value = context.content;
                 document.getElementById('context-category').value = context.category || '';
+
+                // フォルダ名取得
+                if (context.folder) {
+                    const folder = this.foldersManager.findById(context.folder);
+                    document.getElementById('context-folder').value = folder ? folder.name : '';
+                } else {
+                    document.getElementById('context-folder').value = '';
+                }
+
                 this.editingItem = contextId;
             }
         } else {
@@ -362,6 +468,7 @@ class CognishelfApp {
         const title = document.getElementById('context-title').value.trim();
         const content = document.getElementById('context-content').value.trim();
         const category = document.getElementById('context-category').value.trim();
+        const folderName = document.getElementById('context-folder').value.trim();
 
         if (!title || !content) {
             this.showToast('タイトルと内容は必須です', 'error');
@@ -369,6 +476,12 @@ class CognishelfApp {
         }
 
         const contextData = { title, content, category };
+
+        // フォルダ処理
+        if (folderName) {
+            const folder = this.getOrCreateFolder(folderName, 'context');
+            contextData.folder = folder.id;
+        }
 
         if (this.editingItem) {
             this.contextsManager.update(this.editingItem, contextData);
@@ -378,6 +491,7 @@ class CognishelfApp {
             this.showToast('コンテキストを追加しました', 'success');
         }
 
+        this.renderFolders('context');
         this.renderContexts();
         this.closeAllModals();
     }
@@ -395,35 +509,94 @@ class CognishelfApp {
     // 共通機能
     // ========================================
 
+    getFolders(type) {
+        const allFolders = this.foldersManager.getAll();
+        return allFolders.filter(f => f.type === type);
+    }
+
+    getOrCreateFolder(name, type) {
+        const folders = this.getFolders(type);
+        let folder = folders.find(f => f.name === name);
+
+        if (!folder) {
+            folder = this.foldersManager.add({ name, type });
+        }
+
+        return folder;
+    }
+
+    filterByFolder(items, folderId) {
+        if (!folderId) return items;
+        return items.filter(item => item.folder === folderId);
+    }
+
+    renderFolders(type) {
+        const folders = this.getFolders(type);
+        const containerId = type === 'prompt' ? 'prompt-folders' : 'context-folders';
+        const container = document.getElementById(containerId);
+
+        if (!container) return;
+
+        const currentFolder = type === 'prompt' ? this.currentPromptFolder : this.currentContextFolder;
+
+        const folderItems = folders.map(folder => {
+            const isActive = currentFolder === folder.id;
+            return `
+                <li class="folder-item ${isActive ? 'active' : ''}" data-folder-id="${folder.id}">
+                    <span class="folder-icon">📁</span>
+                    <span class="folder-name">${this.escapeHtml(folder.name)}</span>
+                </li>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <li class="folder-item ${!currentFolder ? 'active' : ''}" data-folder-id="">
+                <span class="folder-icon">📂</span>
+                <span class="folder-name">すべて</span>
+            </li>
+            <li class="folder-item ${currentFolder === 'uncategorized' ? 'active' : ''}" data-folder-id="uncategorized">
+                <span class="folder-icon">📄</span>
+                <span class="folder-name">未分類</span>
+            </li>
+            ${folderItems}
+        `;
+
+        // フォルダクリックイベント
+        container.querySelectorAll('.folder-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const folderId = item.dataset.folderId || null;
+                if (type === 'prompt') {
+                    this.currentPromptFolder = folderId === 'uncategorized' ? 'uncategorized' : folderId;
+                    this.renderPrompts();
+                    this.renderFolders('prompt');
+                } else {
+                    this.currentContextFolder = folderId === 'uncategorized' ? 'uncategorized' : folderId;
+                    this.renderContexts();
+                    this.renderFolders('context');
+                }
+            });
+        });
+    }
+
     attachCardEventListeners(type) {
+        // カードクリックでプレビュー
+        document.querySelectorAll(`.card[data-type="${type}"]`).forEach(card => {
+            card.addEventListener('click', (e) => {
+                // ボタンクリック時はプレビューを開かない
+                if (e.target.closest('button')) {
+                    return;
+                }
+                const id = card.dataset.id;
+                this.openPreviewModal(id, type);
+            });
+        });
+
         // コピーボタン
         document.querySelectorAll(`.copy-btn[data-type="${type}"]`).forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const id = btn.dataset.id;
                 this.copyToClipboard(id, type);
-            });
-        });
-
-        // 編集ボタン
-        document.querySelectorAll(`.edit-btn[data-type="${type}"]`).forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.id;
-                if (type === 'prompt') {
-                    this.openPromptModal(id);
-                } else {
-                    this.openContextModal(id);
-                }
-            });
-        });
-
-        // 削除ボタン
-        document.querySelectorAll(`.delete-btn[data-type="${type}"]`).forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.id;
-                this.deleteItem(id, type);
             });
         });
     }
@@ -463,12 +636,58 @@ class CognishelfApp {
         }
     }
 
+    openPreviewModal(id, type) {
+        const manager = type === 'prompt' ? this.promptsManager : this.contextsManager;
+        const item = manager.findById(id);
+
+        if (!item) return;
+
+        this.previewItem = id;
+        this.previewType = type;
+
+        const modal = document.getElementById('preview-modal');
+        const titleEl = document.getElementById('preview-title');
+        const metaEl = document.getElementById('preview-meta');
+        const contentEl = document.getElementById('preview-content');
+
+        // タイトル設定
+        titleEl.textContent = item.title;
+
+        // メタ情報
+        const metaInfo = [];
+        metaInfo.push(`作成日: ${this.formatDate(item.createdAt)}`);
+
+        if (type === 'prompt' && item.tags && item.tags.length > 0) {
+            metaInfo.push(`タグ: ${item.tags.join(', ')}`);
+        }
+
+        if (type === 'context' && item.category) {
+            metaInfo.push(`カテゴリ: ${item.category}`);
+        }
+
+        if (item.folder) {
+            const folder = this.foldersManager.findById(item.folder);
+            if (folder) {
+                metaInfo.push(`フォルダ: ${folder.name}`);
+            }
+        }
+
+        metaEl.innerHTML = metaInfo.map(info => `<span>${this.escapeHtml(info)}</span>`).join('');
+
+        // コンテンツ（Markdownレンダリング）
+        contentEl.innerHTML = this.renderMarkdown(item.content);
+
+        modal.classList.add('active');
+    }
+
     closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
             modal.classList.remove('active');
         });
         this.editingItem = null;
         this.editingType = null;
+        this.previewItem = null;
+        this.previewType = null;
     }
 
     showToast(message, type = 'success') {
@@ -498,6 +717,28 @@ class CognishelfApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    renderMarkdown(text) {
+        if (typeof marked === 'undefined') {
+            // marked.jsが読み込まれていない場合はエスケープのみ
+            return this.escapeHtml(text);
+        }
+
+        // marked.jsの設定: XSS対策とシンプルなレンダリング
+        marked.setOptions({
+            breaks: true,        // 改行を<br>に変換
+            gfm: true,           // GitHub Flavored Markdown
+            headerIds: false,    // ヘッダーIDを無効化
+            mangle: false        // メールアドレスの難読化を無効化
+        });
+
+        try {
+            return marked.parse(text);
+        } catch (e) {
+            console.error('Markdown parsing error:', e);
+            return this.escapeHtml(text);
+        }
     }
 
     formatDate(dateString) {

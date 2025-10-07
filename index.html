@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cognishelf - プロンプト&コンテキストギャラリー</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 </head>
 <body>
     <div id="app">
@@ -26,33 +28,75 @@
 
             <!-- プロンプトギャラリー -->
             <section id="prompts-section" class="content-section active">
-                <div class="section-header">
-                    <h2>プロンプトギャラリー</h2>
-                    <button class="btn btn-primary" id="add-prompt-btn">+ 新規プロンプト</button>
-                </div>
+                <div class="content-with-sidebar">
+                    <aside class="folders-sidebar">
+                        <h3 class="sidebar-title">フォルダ</h3>
+                        <ul id="prompt-folders" class="folders-list">
+                            <!-- フォルダアイテムが動的に追加されます -->
+                        </ul>
+                    </aside>
 
-                <div class="search-box">
-                    <input type="text" id="prompt-search" placeholder="プロンプトを検索...">
-                </div>
+                    <div class="content-main">
+                        <div class="section-header">
+                            <h2>プロンプトギャラリー</h2>
+                            <button class="btn btn-primary" id="add-prompt-btn">+ 新規プロンプト</button>
+                        </div>
 
-                <div id="prompts-grid" class="items-grid">
-                    <!-- プロンプトカードがここに動的に追加されます -->
+                        <div class="toolbar">
+                            <div class="search-box">
+                                <input type="text" id="prompt-search" placeholder="プロンプトを検索...">
+                            </div>
+                            <div class="sort-box">
+                                <select id="prompt-sort" class="sort-select">
+                                    <option value="date-desc">作成日 (新しい順)</option>
+                                    <option value="date-asc">作成日 (古い順)</option>
+                                    <option value="title-asc">タイトル (A→Z)</option>
+                                    <option value="title-desc">タイトル (Z→A)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="prompts-grid" class="items-grid">
+                            <!-- プロンプトカードがここに動的に追加されます -->
+                        </div>
+                    </div>
                 </div>
             </section>
 
             <!-- コンテキストギャラリー -->
             <section id="contexts-section" class="content-section">
-                <div class="section-header">
-                    <h2>コンテキストギャラリー</h2>
-                    <button class="btn btn-primary" id="add-context-btn">+ 新規コンテキスト</button>
-                </div>
+                <div class="content-with-sidebar">
+                    <aside class="folders-sidebar">
+                        <h3 class="sidebar-title">フォルダ</h3>
+                        <ul id="context-folders" class="folders-list">
+                            <!-- フォルダアイテムが動的に追加されます -->
+                        </ul>
+                    </aside>
 
-                <div class="search-box">
-                    <input type="text" id="context-search" placeholder="コンテキストを検索...">
-                </div>
+                    <div class="content-main">
+                        <div class="section-header">
+                            <h2>コンテキストギャラリー</h2>
+                            <button class="btn btn-primary" id="add-context-btn">+ 新規コンテキスト</button>
+                        </div>
 
-                <div id="contexts-grid" class="items-grid">
-                    <!-- コンテキストカードがここに動的に追加されます -->
+                        <div class="toolbar">
+                            <div class="search-box">
+                                <input type="text" id="context-search" placeholder="コンテキストを検索...">
+                            </div>
+                            <div class="sort-box">
+                                <select id="context-sort" class="sort-select">
+                                    <option value="date-desc">作成日 (新しい順)</option>
+                                    <option value="date-asc">作成日 (古い順)</option>
+                                    <option value="title-asc">タイトル (A→Z)</option>
+                                    <option value="title-desc">タイトル (Z→A)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="contexts-grid" class="items-grid">
+                            <!-- コンテキストカードがここに動的に追加されます -->
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
@@ -78,6 +122,10 @@
                     <div class="form-group">
                         <label for="prompt-tags">タグ (カンマ区切り)</label>
                         <input type="text" id="prompt-tags" placeholder="例: AI, 分析, 要約">
+                    </div>
+                    <div class="form-group">
+                        <label for="prompt-folder">フォルダ</label>
+                        <input type="text" id="prompt-folder" placeholder="フォルダ名を入力 (任意)">
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
@@ -109,11 +157,35 @@
                         <label for="context-category">カテゴリ</label>
                         <input type="text" id="context-category" placeholder="例: 技術知識, ビジネス, デザイン">
                     </div>
+                    <div class="form-group">
+                        <label for="context-folder">フォルダ</label>
+                        <input type="text" id="context-folder" placeholder="フォルダ名を入力 (任意)">
+                    </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
                         <button type="submit" class="btn btn-primary">保存</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: プレビュー -->
+    <div id="preview-modal" class="modal">
+        <div class="modal-content modal-content-large">
+            <div class="modal-header">
+                <h2 id="preview-title"></h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="preview-meta" class="preview-meta"></div>
+                <div id="preview-content" class="preview-content markdown-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-success" id="preview-copy-btn">コピー</button>
+                <button class="btn btn-secondary" id="preview-edit-btn">編集</button>
+                <button class="btn btn-danger" id="preview-delete-btn">削除</button>
+                <button class="btn btn-secondary cancel-btn">閉じる</button>
             </div>
         </div>
     </div>
