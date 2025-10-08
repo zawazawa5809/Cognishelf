@@ -1,10 +1,10 @@
-# Cognishelf Roadmap - Stable Diffusion特化版
+# Cognishelf Roadmap - ITプロジェクトマネージャー特化版
 
-**最終更新:** 2025-01-08
+**最終更新:** 2025-10-08
 
 ## 🎯 ビジョン
 
-CognishelfをStable Diffusion用のプロンプト管理・最適化ツールとして進化させ、画像生成ワークフローを劇的に改善します。
+CognishelfをITシステム開発プロジェクトのプロジェクトマネージャー向けのプロンプト・コンテキスト管理ツールとして進化させ、プロジェクト管理業務を劇的に効率化します。
 
 ---
 
@@ -13,17 +13,17 @@ CognishelfをStable Diffusion用のプロンプト管理・最適化ツールと
 | Phase | 名称 | 期間 | 状態 | 主要成果物 |
 |-------|------|------|------|-----------|
 | 0 | Vite移行準備 | 1週間 | ✅ 完了 | Vite環境、モジュール分割 |
-| 1 | SD特化基盤 | 3日間 | ⏭️ スキップ | (Phase 2に統合) |
-| 2 | プロンプトミキサー | 1週間 | ✅ 完了 | レイヤー型プロンプト構築UI |
-| 3 | スタイルプリセット | 3日間 | 🔜 計画中 | プリセットライブラリ、ワンクリック適用 |
-| 4 | バリエーション生成 | 1週間 | 🔜 計画中 | 変数置換エンジン、一括生成 |
-| 5 | 高度な機能 | 2週間 | 🔜 計画中 | プロンプト分析、A/Bテスト |
+| 1 | PM特化基盤 | 3日間 | ✅ 完了 | プロジェクトデータモデル拡張 |
+| 2 | テンプレートライブラリ | 1週間 | 🔜 計画中 | PM業務テンプレート集 |
+| 3 | プロジェクト管理 | 1週間 | 🔜 計画中 | プロジェクト単位での整理 |
+| 4 | AI連携強化 | 1週間 | 🔜 計画中 | Claude/ChatGPT連携機能 |
+| 5 | 高度な機能 | 2週間 | 🔜 計画中 | ナレッジベース、バージョン管理 |
 
-**総実装期間:** 約5週間
+**総実装期間:** 約6週間
 
 ---
 
-## 🚀 Phase 0: Vite移行準備
+## 🚀 Phase 0: Vite移行準備 ✅ 完了
 
 ### 目的
 - モダンな開発環境への移行
@@ -47,32 +47,19 @@ npm install idb marked
 #### 3. モジュール分割
 ```
 src/
-├── modules/
-│   ├── storage/
-│   │   ├── StorageInterface.js
-│   │   ├── IndexedDBManager.js
-│   │   ├── StorageManager.js
-│   │   └── StorageAdapter.js
-│   ├── ui/
-│   │   ├── PromptRenderer.js
-│   │   ├── ContextRenderer.js
-│   │   ├── ModalManager.js
-│   │   └── ToastNotification.js
-│   └── utils/
-│       ├── dateFormatter.js
-│       ├── htmlEscape.js
-│       └── markdownRenderer.js
+├── models/
+│   ├── PMPrompt.js
+│   ├── PMContext.js
+│   └── Project.js
 ├── app.js
 └── main.js
 ```
 
 #### 4. 既存機能の動作確認
-
 - [x] Vite環境構築
 - [x] 依存関係をnpmパッケージへ移行
 - [x] モジュール分割実装(main.js/app.js)
 - [x] 本番ビルド成功確認
-- [ ] ブラウザでの手動動作確認(TESTING.md参照)
 
 ### 成果物
 - ✅ Vite開発環境
@@ -88,11 +75,11 @@ src/
 
 ---
 
-## 📦 Phase 1: Stable Diffusion特化基盤
+## 📦 Phase 1: PM特化基盤 ✅ 完了
 
 ### 目的
-- データモデルにSD特化フィールドを追加
-- パラメータ保存機能の実装
+- データモデルにPM業務特化フィールドを追加
+- プロジェクト情報の保存機能実装
 
 ### データモデル拡張
 
@@ -101,76 +88,108 @@ src/
 {
   // 既存フィールド
   id: "prompt-123",
-  title: "アニメ風猫",
-  content: "cat sitting, anime style, 8k",
-  tags: ["動物", "アニメ"],
-  folder: "folder-id",
+  title: "要件定義フェーズキックオフMTG議事録",
+  content: "...",
+  tags: ["要件定義", "キックオフ"],
+  folder: "ProjectA",
   createdAt: "2025-01-08T00:00:00.000Z",
   updatedAt: "2025-01-08T00:00:00.000Z",
 
-  // 新規: Stable Diffusion特化フィールド
-  sdConfig: {
-    // ポジティブプロンプト(最終版)
-    positivePrompt: "cat sitting, anime style, cel shading, 8k, masterpiece",
+  // 新規: PM特化フィールド
+  pmConfig: {
+    // プロジェクト情報
+    projectId: "project-001",
+    projectName: "新基幹システム構築",
+    phase: "要件定義", // 企画、要件定義、設計、開発、テスト、リリース
 
-    // ネガティブプロンプト
-    negativePrompt: "blurry, low quality, watermark, realistic, photo",
-
-    // 生成パラメータ
-    parameters: {
-      steps: 28,
-      cfgScale: 7.5,
-      sampler: "DPM++ 2M Karras",
-      width: 512,
-      height: 768,
-      seed: -1,  // -1 = ランダム
-      clipSkip: 1,
-      denoisingStrength: 0.7  // img2img用
-    },
-
-    // スタイルプリセット参照
-    stylePresets: ["anime", "high-quality"],
-
-    // バリエーション定義
-    variations: [
-      {
-        name: "夕暮れ版",
-        positiveAdd: ", sunset, golden hour",
-        negativeAdd: "",
-        parametersOverride: { cfgScale: 8.0 }
-      }
+    // ステークホルダー
+    stakeholders: [
+      { name: "山田太郎", role: "PO", email: "yamada@example.com" },
+      { name: "佐藤花子", role: "開発リーダー", email: "sato@example.com" }
     ],
+
+    // 関連ドキュメント
+    relatedDocs: [
+      { title: "要件定義書v1.0", url: "https://..." },
+      { title: "WBS", url: "https://..." }
+    ],
+
+    // 優先度・重要度
+    priority: "高", // 高、中、低
+    importance: 5,  // 1-5
+
+    // ステータス
+    status: "進行中", // 下書き、進行中、完了、保留
+    dueDate: "2025-02-28T00:00:00.000Z",
 
     // 使用統計
     stats: {
-      generationCount: 15,
+      usageCount: 15,
       lastUsed: "2025-01-08T14:23:00.000Z",
-      rating: 4.5
+      effectiveness: 4.5  // 有効性評価 1-5
     }
   }
 }
 ```
 
-#### スタイルプリセット構造
+#### コンテキストデータ構造
 ```javascript
 {
-  id: "preset-anime-ghibli",
-  name: "アニメ風(Ghibli)",
-  category: "スタイル",
-  tags: ["アニメ", "ジブリ"],
+  // 既存フィールド
+  id: "context-456",
+  title: "プロジェクト背景・目的",
+  content: "...",
+  category: "プロジェクト概要",
+  tags: ["背景", "目的"],
+  folder: "ProjectA",
+  createdAt: "2025-01-08T00:00:00.000Z",
+  updatedAt: "2025-01-08T00:00:00.000Z",
 
-  positivePrompt: "studio ghibli style, anime, cel shading, hand-painted",
-  negativePrompt: "realistic, photo, 3d render, cgi",
+  // 新規: PM特化フィールド
+  pmConfig: {
+    projectId: "project-001",
+    projectName: "新基幹システム構築",
+    contextType: "背景情報", // 背景情報、技術仕様、制約条件、リスク
+    visibility: "チーム全体", // 個人、チーム全体、ステークホルダー
 
-  recommendedParams: {
-    steps: 28,
-    cfgScale: 7.0,
-    sampler: "DPM++ 2M Karras"
+    // バージョン管理
+    version: "1.2",
+    previousVersionId: "context-123",
+
+    // 関連プロンプト
+    relatedPrompts: ["prompt-123", "prompt-124"]
+  }
+}
+```
+
+#### プロジェクトデータ構造
+```javascript
+{
+  id: "project-001",
+  name: "新基幹システム構築",
+  description: "既存の基幹システムをクラウドネイティブに刷新",
+
+  // プロジェクト期間
+  startDate: "2025-01-01T00:00:00.000Z",
+  endDate: "2025-12-31T00:00:00.000Z",
+
+  // 現在のフェーズ
+  currentPhase: "要件定義",
+
+  // チームメンバー
+  team: [
+    { name: "山田太郎", role: "PM", email: "yamada@example.com" },
+    { name: "佐藤花子", role: "開発リーダー", email: "sato@example.com" }
+  ],
+
+  // プロジェクト設定
+  settings: {
+    defaultPriority: "中",
+    phases: ["企画", "要件定義", "設計", "開発", "テスト", "リリース"]
   },
 
-  preview: "data:image/jpeg;base64,...",  // サムネイル
-
-  createdAt: "2025-01-08T00:00:00.000Z"
+  createdAt: "2025-01-01T00:00:00.000Z",
+  updatedAt: "2025-01-08T00:00:00.000Z"
 }
 ```
 
@@ -184,39 +203,52 @@ const db = await idb.openDB('cognishelf-db', 2, {
     // prompts, contexts, folders
 
     // 新規ストア(バージョン2)
-    if (!db.objectStoreNames.contains('stylePresets')) {
-      const presetStore = db.createObjectStore('stylePresets', { keyPath: 'id' });
-      presetStore.createIndex('name', 'name', { unique: false });
-      presetStore.createIndex('category', 'category', { unique: false });
-      presetStore.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+    if (!db.objectStoreNames.contains('projects')) {
+      const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
+      projectStore.createIndex('name', 'name', { unique: false });
+      projectStore.createIndex('currentPhase', 'currentPhase', { unique: false });
+      projectStore.createIndex('startDate', 'startDate', { unique: false });
     }
 
-    // マイグレーション: 既存プロンプトにsdConfigフィールド追加
+    // マイグレーション: 既存プロンプト・コンテキストにpmConfigフィールド追加
     if (oldVersion < 2) {
+      // プロンプトマイグレーション
       const promptStore = transaction.objectStore('prompts');
       promptStore.getAll().then(prompts => {
         prompts.forEach(prompt => {
-          if (!prompt.sdConfig) {
-            prompt.sdConfig = {
-              positivePrompt: prompt.content,
-              negativePrompt: "",
-              parameters: {
-                steps: 28,
-                cfgScale: 7.5,
-                sampler: "DPM++ 2M Karras",
-                width: 512,
-                height: 512,
-                seed: -1
-              },
-              stylePresets: [],
-              variations: [],
-              stats: {
-                generationCount: 0,
-                lastUsed: null,
-                rating: 0
-              }
+          if (!prompt.pmConfig) {
+            prompt.pmConfig = {
+              projectId: null,
+              projectName: "",
+              phase: "未分類",
+              stakeholders: [],
+              relatedDocs: [],
+              priority: "中",
+              importance: 3,
+              status: "下書き",
+              dueDate: null,
+              stats: { usageCount: 0, lastUsed: null, effectiveness: 0 }
             };
             promptStore.put(prompt);
+          }
+        });
+      });
+
+      // コンテキストマイグレーション
+      const contextStore = transaction.objectStore('contexts');
+      contextStore.getAll().then(contexts => {
+        contexts.forEach(context => {
+          if (!context.pmConfig) {
+            context.pmConfig = {
+              projectId: null,
+              projectName: "",
+              contextType: "背景情報",
+              visibility: "個人",
+              version: "1.0",
+              previousVersionId: null,
+              relatedPrompts: []
+            };
+            contextStore.put(context);
           }
         });
       });
@@ -233,813 +265,348 @@ const db = await idb.openDB('cognishelf-db', 2, {
 <input type="text" id="prompt-title">
 <textarea id="prompt-content"></textarea>
 
-<!-- 新規: SD設定セクション -->
-<div class="sd-config-section">
-  <h3>Stable Diffusion設定</h3>
+<!-- 新規: PM設定セクション -->
+<div class="pm-config-section">
+  <h3>📊 プロジェクト管理設定</h3>
 
-  <div class="form-group">
-    <label>ポジティブプロンプト (最終版)</label>
-    <textarea id="sd-positive" rows="4"></textarea>
-  </div>
-
-  <div class="form-group">
-    <label>ネガティブプロンプト</label>
-    <textarea id="sd-negative" rows="2"></textarea>
+  <div class="form-row">
+    <div class="form-group">
+      <label>プロジェクト名</label>
+      <input type="text" id="pm-project-name">
+    </div>
+    <div class="form-group">
+      <label>フェーズ</label>
+      <select id="pm-phase">
+        <option>未分類</option>
+        <option>企画</option>
+        <option>要件定義</option>
+        <option>設計</option>
+        <option>開発</option>
+        <option>テスト</option>
+        <option>リリース</option>
+      </select>
+    </div>
   </div>
 
   <div class="form-row">
     <div class="form-group">
-      <label>Steps</label>
-      <input type="number" id="sd-steps" value="28">
+      <label>優先度</label>
+      <select id="pm-priority">
+        <option>高</option>
+        <option selected>中</option>
+        <option>低</option>
+      </select>
     </div>
     <div class="form-group">
-      <label>CFG Scale</label>
-      <input type="number" id="sd-cfg" value="7.5" step="0.5">
+      <label>ステータス</label>
+      <select id="pm-status">
+        <option>下書き</option>
+        <option selected>進行中</option>
+        <option>完了</option>
+        <option>保留</option>
+      </select>
     </div>
   </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Sampler</label>
-      <select id="sd-sampler">
-        <option>Euler a</option>
-        <option selected>DPM++ 2M Karras</option>
-        <option>DPM++ SDE Karras</option>
-        <option>UniPC</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>Width x Height</label>
-      <select id="sd-size">
-        <option value="512x512">512x512</option>
-        <option value="512x768">512x768 (Portrait)</option>
-        <option value="768x512">768x512 (Landscape)</option>
-        <option value="1024x1024">1024x1024</option>
-      </select>
-    </div>
+  <div class="form-group">
+    <label>期限</label>
+    <input type="date" id="pm-due-date">
+  </div>
+
+  <div class="form-group">
+    <label>ステークホルダー (カンマ区切り)</label>
+    <input type="text" id="pm-stakeholders" placeholder="山田太郎(PO), 佐藤花子(開発リーダー)">
   </div>
 </div>
 ```
 
 ### 実装チェックリスト
-- [ ] データモデル定義(`src/models/SDPrompt.js`)
-- [ ] IndexedDBスキーマ更新(バージョン2)
-- [ ] マイグレーションロジック実装
-- [ ] UI拡張(SDパラメータフォーム)
-- [ ] 保存・読み込み処理更新
-- [ ] 既存データの後方互換性確認
+- [x] データモデル定義(`src/models/PMPrompt.js`, `PMContext.js`, `Project.js`)
+- [x] IndexedDBスキーマ更新(バージョン2)
+- [x] マイグレーションロジック実装
+- [x] UI拡張(PM設定フォーム)
+- [x] プロジェクト管理画面
+- [x] 保存・読み込み処理更新
+- [x] 既存データの後方互換性確認
 
 ### 成果物
-- ✅ SD特化データモデル
-- ✅ パラメータ保存機能
+- ✅ PM特化データモデル
+- ✅ プロジェクト情報保存機能
 - ✅ 既存データの自動マイグレーション
 
----
-
-## 🎨 Phase 2: プロンプトミキサー
-
-### 目的
-プロンプトをレイヤー構造で組み立て、チェックボックスで簡単に組み合わせられるUI
-
-### 機能仕様
-
-#### コンポーネント構造
-```
-プロンプトミキサー
-├── ベースプロンプト (必須)
-├── スタイルレイヤー (複数選択可)
-│   ├ アニメ風
-│   ├ 写実的
-│   └ 油絵風
-├── 品質ブースター (複数選択可)
-│   ├ 8K高画質
-│   ├ 高精細
-│   └ プロ品質
-├── シーン要素 (複数選択可)
-│   ├ ライティング
-│   ├ 構図
-│   └ 時間帯
-└── 除外要素 (ネガティブ)
-    ├ 標準NG
-    └ 品質低下要因
-```
-
-#### データ構造
-```javascript
-// プロンプトレイヤー定義
-{
-  id: "layer-anime-style",
-  category: "スタイル",
-  name: "アニメ風",
-  positiveAdd: "anime style, cel shading, vibrant colors",
-  negativeAdd: "realistic, photo",
-  weight: 1.0,  // 将来的な重み付け用
-  enabled: true
-}
-```
-
-#### UI実装
-```javascript
-class PromptMixer {
-  constructor(basePrompt = "") {
-    this.basePrompt = basePrompt;
-    this.layers = [];
-    this.negativeLayers = [];
-  }
-
-  addLayer(layer) {
-    this.layers.push(layer);
-  }
-
-  removeLayer(layerId) {
-    this.layers = this.layers.filter(l => l.id !== layerId);
-  }
-
-  compile() {
-    const positive = [
-      this.basePrompt,
-      ...this.layers
-        .filter(l => l.enabled)
-        .map(l => l.positiveAdd)
-    ].filter(s => s.trim()).join(', ');
-
-    const negative = this.negativeLayers
-      .filter(l => l.enabled)
-      .map(l => l.negativeAdd)
-      .filter(s => s.trim())
-      .join(', ');
-
-    return {
-      positive,
-      negative,
-      tokenCount: this.estimateTokens(positive)
-    };
-  }
-
-  estimateTokens(text) {
-    // 簡易的なトークン推定(カンマ区切り + 1.5倍)
-    return Math.ceil(text.split(',').length * 1.5);
-  }
-}
-```
-
-#### プリセットレイヤー
-```javascript
-// デフォルトレイヤーセット
-const DEFAULT_LAYERS = {
-  styles: [
-    { id: 'anime', name: 'アニメ風', positiveAdd: 'anime style, cel shading', negativeAdd: 'realistic, photo' },
-    { id: 'realistic', name: '写実的', positiveAdd: 'photorealistic, photograph', negativeAdd: 'anime, cartoon' },
-    { id: 'oil', name: '油絵風', positiveAdd: 'oil painting, canvas texture', negativeAdd: 'digital art' }
-  ],
-  quality: [
-    { id: '8k', name: '8K高画質', positiveAdd: '8k, ultra detailed, masterpiece', negativeAdd: '' },
-    { id: 'sharp', name: '高精細', positiveAdd: 'highly detailed, sharp focus', negativeAdd: 'blurry, soft' },
-    { id: 'pro', name: 'プロ品質', positiveAdd: 'professional, award-winning', negativeAdd: 'amateur' }
-  ],
-  lighting: [
-    { id: 'dramatic', name: 'ドラマチック', positiveAdd: 'dramatic lighting, cinematic', negativeAdd: 'flat lighting' },
-    { id: 'soft', name: 'ソフト', positiveAdd: 'soft lighting, diffused', negativeAdd: 'harsh shadows' },
-    { id: 'golden', name: 'ゴールデンアワー', positiveAdd: 'golden hour, warm lighting', negativeAdd: '' }
-  ],
-  negative: [
-    { id: 'standard-ng', name: '標準NG', negativeAdd: 'blurry, low quality, watermark, text, signature', positiveAdd: '' },
-    { id: 'anatomy-fix', name: '人体崩壊防止', negativeAdd: 'bad anatomy, extra limbs, missing limbs, bad hands', positiveAdd: '' }
-  ]
-};
-```
-
-### 実装チェックリスト
-- [ ] PromptMixerクラス実装
-- [ ] レイヤーUI実装(チェックボックス)
-- [ ] リアルタイムプレビュー(最終プロンプト表示)
-- [ ] トークンカウンター
-- [ ] デフォルトレイヤーセット登録
-- [ ] カスタムレイヤー作成機能
-- [ ] レイヤーのインポート/エクスポート
-
-### 成果物
-- ✅ 直感的なプロンプト組み立てUI
-- ✅ リアルタイムプレビュー
-- ✅ トークン数監視
+**詳細:** [PHASE1_COMPLETION.md](PHASE1_COMPLETION.md)
 
 ---
 
-## 🎭 Phase 3: スタイルプリセット
+## 📚 Phase 2: テンプレートライブラリ 🔜 計画中
 
 ### 目的
-高品質なプロンプトをワンクリックで適用できるライブラリ
+PM業務でよく使うプロンプト・コンテキストのテンプレート集を提供
 
-### プリセットカテゴリ
+### テンプレートカテゴリ
 
-#### 1. スタイル別
-- アニメ風(Ghibli)
-- アニメ風(Makoto Shinkai)
-- フォトリアル
-- サイバーパンク
-- ファンタジー
-- 油絵風
-- 水彩風
-- ペン画
+#### 1. 会議・コミュニケーション
+- キックオフMTG議事録
+- 週次定例MTG
+- ステークホルダー報告
+- 課題エスカレーション
+- リスク報告
 
-#### 2. アーティスト別
-- Greg Rutkowski風
-- Artgerm風
-- Ross Tran風
-- Studio Ghibli風
+#### 2. ドキュメント作成
+- 要件定義書レビュー依頼
+- 設計書作成ガイド
+- テスト計画書
+- リリース計画
+- 振り返り(KPT)
 
-#### 3. 用途別
-- キャラクターデザイン
-- 背景/風景
-- コンセプトアート
-- ポートレート
-- アイコン/アバター
+#### 3. プロジェクト管理
+- WBS作成支援
+- スケジュール調整
+- リソース配分
+- 予算管理
+- 品質管理
+
+#### 4. リスク管理
+- リスク洗い出し
+- リスク対応計画
+- 課題管理
+- 変更管理
 
 ### データ構造
 ```javascript
 {
-  id: "preset-ghibli",
-  name: "アニメ風(Ghibli)",
-  category: "スタイル",
-  tags: ["アニメ", "ジブリ", "手描き"],
+  id: "template-kickoff",
+  name: "キックオフMTG議事録",
+  category: "会議・コミュニケーション",
+  tags: ["会議", "キックオフ", "議事録"],
 
-  description: "スタジオジブリ風のアニメーション調",
+  description: "プロジェクトキックオフミーティングの議事録作成用テンプレート",
 
-  positivePrompt: "studio ghibli style, anime, hand-drawn, traditional animation, cel shading, watercolor background, warm colors, nostalgic atmosphere",
-  negativePrompt: "realistic, photo, 3d render, cgi, digital painting",
+  promptTemplate: `
+# {{projectName}} キックオフMTG議事録
 
-  recommendedParams: {
-    steps: 28,
-    cfgScale: 7.0,
-    sampler: "DPM++ 2M Karras",
-    width: 768,
-    height: 512
-  },
+## 開催情報
+- 日時: {{date}}
+- 参加者: {{attendees}}
+- 場所: {{location}}
 
-  preview: "/assets/presets/ghibli-preview.jpg",
+## アジェンダ
+1. プロジェクト背景・目的
+2. スコープ・成果物
+3. スケジュール・マイルストーン
+4. 体制・役割分担
+5. コミュニケーションルール
+6. Q&A
 
-  usage: {
-    applyCount: 124,
-    rating: 4.8
-  },
+## 議事内容
+{{content}}
+
+## 決定事項
+-
+
+## Next Action
+- [ ]
+
+## 課題・リスク
+-
+`,
+
+  contextTemplate: `
+# プロジェクト背景・目的
+
+## 背景
+{{background}}
+
+## 目的
+{{objective}}
+
+## 成功指標(KPI)
+{{kpi}}
+`,
+
+  variables: [
+    { name: "projectName", label: "プロジェクト名", type: "text" },
+    { name: "date", label: "開催日時", type: "datetime" },
+    { name: "attendees", label: "参加者", type: "text" },
+    { name: "location", label: "場所", type: "text" },
+    { name: "content", label: "議事内容", type: "textarea" }
+  ],
+
+  usageCount: 0,
+  rating: 0,
 
   createdAt: "2025-01-08T00:00:00.000Z",
-  author: "system"  // system | user
+  author: "system"
 }
 ```
 
 ### UI実装
 
-#### プリセットライブラリ画面
+#### テンプレートライブラリ画面
 ```html
-<div class="preset-library">
-  <div class="preset-filters">
+<div class="template-library">
+  <div class="template-filters">
     <button class="filter-btn active" data-category="all">すべて</button>
-    <button class="filter-btn" data-category="スタイル">スタイル</button>
-    <button class="filter-btn" data-category="アーティスト">アーティスト</button>
-    <button class="filter-btn" data-category="用途">用途</button>
+    <button class="filter-btn" data-category="会議・コミュニケーション">会議</button>
+    <button class="filter-btn" data-category="ドキュメント作成">ドキュメント</button>
+    <button class="filter-btn" data-category="プロジェクト管理">PM</button>
+    <button class="filter-btn" data-category="リスク管理">リスク</button>
   </div>
 
-  <div class="preset-grid">
-    <!-- プリセットカード -->
-    <div class="preset-card" data-preset-id="preset-ghibli">
-      <div class="preset-preview">
-        <img src="preview.jpg" alt="Ghibli Style">
-      </div>
-      <div class="preset-info">
-        <h3>アニメ風(Ghibli)</h3>
-        <p>スタジオジブリ風のアニメーション調</p>
-        <div class="preset-tags">
-          <span class="tag">アニメ</span>
-          <span class="tag">ジブリ</span>
-        </div>
-        <div class="preset-stats">
-          ⭐ 4.8 | 🎨 124回使用
+  <div class="template-grid">
+    <!-- テンプレートカード -->
+    <div class="template-card">
+      <div class="template-info">
+        <h3>キックオフMTG議事録</h3>
+        <p>プロジェクトキックオフミーティングの議事録作成用</p>
+        <div class="template-tags">
+          <span class="tag">会議</span>
+          <span class="tag">キックオフ</span>
         </div>
       </div>
-      <div class="preset-actions">
-        <button class="btn btn-primary apply-preset">適用</button>
-        <button class="btn btn-secondary preview-preset">プレビュー</button>
+      <div class="template-actions">
+        <button class="btn btn-primary apply-template">適用</button>
+        <button class="btn btn-secondary preview-template">プレビュー</button>
       </div>
     </div>
   </div>
 </div>
 ```
 
-#### プリセット適用ロジック
-```javascript
-class StylePresetManager {
-  async applyPreset(presetId, targetPromptId) {
-    const preset = await this.presetsManager.findById(presetId);
-    const prompt = await this.promptsManager.findById(targetPromptId);
-
-    // プロンプトにプリセットを適用
-    const updatedPrompt = {
-      ...prompt,
-      sdConfig: {
-        ...prompt.sdConfig,
-        positivePrompt: this.mergePrompts(
-          prompt.sdConfig.positivePrompt,
-          preset.positivePrompt
-        ),
-        negativePrompt: this.mergePrompts(
-          prompt.sdConfig.negativePrompt,
-          preset.negativePrompt
-        ),
-        parameters: {
-          ...prompt.sdConfig.parameters,
-          ...preset.recommendedParams
-        },
-        stylePresets: [
-          ...prompt.sdConfig.stylePresets,
-          presetId
-        ]
-      }
-    };
-
-    await this.promptsManager.update(targetPromptId, updatedPrompt);
-
-    // 使用統計更新
-    await this.updatePresetStats(presetId);
-  }
-
-  mergePrompts(base, addition) {
-    // 重複を排除してマージ
-    const baseTokens = base.split(',').map(s => s.trim());
-    const addTokens = addition.split(',').map(s => s.trim());
-    const merged = [...new Set([...baseTokens, ...addTokens])];
-    return merged.filter(s => s).join(', ');
-  }
-}
-```
-
-### 初期プリセットデータ
-
-`data/style-presets.json`:
-```json
-[
-  {
-    "name": "アニメ風(Ghibli)",
-    "category": "スタイル",
-    "tags": ["アニメ", "ジブリ"],
-    "positivePrompt": "studio ghibli style, anime, hand-drawn, traditional animation, cel shading, watercolor background, warm colors, nostalgic atmosphere",
-    "negativePrompt": "realistic, photo, 3d render, cgi, digital painting",
-    "recommendedParams": {
-      "steps": 28,
-      "cfgScale": 7.0,
-      "sampler": "DPM++ 2M Karras"
-    }
-  },
-  {
-    "name": "フォトリアル",
-    "category": "スタイル",
-    "tags": ["写実", "リアル"],
-    "positivePrompt": "photograph, photorealistic, 8k uhd, dslr, professional photography, studio lighting, sharp focus, physically-based rendering",
-    "negativePrompt": "painting, drawing, art, anime, cartoon, sketch, low quality",
-    "recommendedParams": {
-      "steps": 30,
-      "cfgScale": 8.0,
-      "sampler": "DPM++ SDE Karras"
-    }
-  }
-]
-```
-
 ### 実装チェックリスト
-- [ ] StylePresetManagerクラス実装
-- [ ] IndexedDBにstylePresetsストア追加
-- [ ] プリセットライブラリUI
+- [ ] TemplateManagerクラス実装
+- [ ] IndexedDBにtemplatesストア追加
+- [ ] テンプレートライブラリUI
 - [ ] フィルタリング機能
-- [ ] プリセット適用ロジック
-- [ ] 使用統計記録
-- [ ] 初期プリセットデータ登録
-- [ ] カスタムプリセット作成機能
-- [ ] プリセットのインポート/エクスポート
+- [ ] テンプレート適用ロジック(変数置換)
+- [ ] 初期テンプレートデータ登録(10種類以上)
+- [ ] カスタムテンプレート作成機能
+- [ ] テンプレートのインポート/エクスポート
 
 ### 成果物
-- ✅ ワンクリックプリセット適用
-- ✅ 10種類以上の高品質プリセット
-- ✅ コミュニティ共有機能の基盤
+- ✅ ワンクリックテンプレート適用
+- ✅ 10種類以上の実用的なPM業務テンプレート
+- ✅ カスタムテンプレート作成機能
 
 ---
 
-## 🔄 Phase 4: バリエーションジェネレーター
+## 🗂️ Phase 3: プロジェクト管理機能 🔜 計画中
 
 ### 目的
-テンプレート変数を使って複数バリエーションを一括生成
+複数プロジェクトを効率的に管理・切り替え
 
 ### 機能仕様
 
-#### 変数置換システム
-```javascript
-// テンプレート
-"{{subject}} {{action}}, {{time}}, {{style}}, 8k"
+#### プロジェクトダッシュボード
+- プロジェクト一覧表示
+- プロジェクト別のプロンプト・コンテキスト数
+- フェーズ進捗状況
+- 期限が近いタスク一覧
 
-// 変数定義
-{
-  subject: ["cat", "dog", "bird"],
-  action: ["sitting", "running", "flying"],
-  time: ["sunrise", "sunset", "night"],
-  style: ["anime", "realistic"]
-}
+#### プロジェクト切り替え
+- サイドバーでのプロジェクト選択
+- 選択中のプロジェクトのアイテムのみ表示
+- プロジェクト横断検索
 
-// 生成: 3 × 3 × 3 × 2 = 54 パターン
-```
-
-#### UI設計
-```html
-<div class="variation-generator">
-  <div class="template-editor">
-    <label>テンプレート</label>
-    <textarea id="variation-template">
-      {{subject}} {{action}}, {{time}}, {{style}}, 8k, masterpiece
-    </textarea>
-  </div>
-
-  <div class="variables-editor">
-    <h3>変数定義</h3>
-
-    <div class="variable-item">
-      <label>{{subject}}</label>
-      <input type="text" placeholder="カンマ区切り: cat, dog, bird">
-      <div class="variable-values">
-        <span class="tag">cat</span>
-        <span class="tag">dog</span>
-        <span class="tag">bird</span>
-      </div>
-    </div>
-
-    <div class="variable-item">
-      <label>{{action}}</label>
-      <input type="text" placeholder="カンマ区切り: sitting, running">
-      <div class="variable-values">
-        <span class="tag">sitting</span>
-        <span class="tag">running</span>
-      </div>
-    </div>
-
-    <button class="btn btn-secondary">+ 変数追加</button>
-  </div>
-
-  <div class="generation-preview">
-    <h3>生成プレビュー (最大100件表示)</h3>
-    <p>総パターン数: <strong>54</strong></p>
-
-    <div class="preview-list">
-      <div class="preview-item">
-        <span class="variation-number">#1</span>
-        cat sitting, sunrise, anime, 8k, masterpiece
-      </div>
-      <div class="preview-item">
-        <span class="variation-number">#2</span>
-        cat sitting, sunset, anime, 8k, masterpiece
-      </div>
-      <!-- ... -->
-    </div>
-  </div>
-
-  <div class="generation-actions">
-    <button class="btn btn-primary" id="generate-all">
-      すべて生成 (54件)
-    </button>
-    <button class="btn btn-secondary" id="generate-selected">
-      選択したもののみ生成
-    </button>
-  </div>
-</div>
-```
-
-#### 実装ロジック
-```javascript
-class VariationGenerator {
-  constructor(template, variables) {
-    this.template = template;
-    this.variables = variables;  // { subject: ["cat", "dog"], ... }
-  }
-
-  generateAll() {
-    const variations = [];
-    const keys = Object.keys(this.variables);
-    const combinations = this.cartesianProduct(
-      keys.map(k => this.variables[k])
-    );
-
-    combinations.forEach((combo, index) => {
-      let prompt = this.template;
-      keys.forEach((key, i) => {
-        prompt = prompt.replace(
-          new RegExp(`{{${key}}}`, 'g'),
-          combo[i]
-        );
-      });
-
-      variations.push({
-        id: `var-${index}`,
-        prompt,
-        variables: Object.fromEntries(
-          keys.map((k, i) => [k, combo[i]])
-        )
-      });
-    });
-
-    return variations;
-  }
-
-  cartesianProduct(arrays) {
-    return arrays.reduce(
-      (acc, curr) => acc.flatMap(x => curr.map(y => [...x, y])),
-      [[]]
-    );
-  }
-
-  async saveAsPrompts(variations, baseConfig) {
-    const saved = [];
-    for (const variation of variations) {
-      const prompt = {
-        title: this.generateTitle(variation),
-        content: variation.prompt,
-        tags: ["バリエーション"],
-        sdConfig: {
-          ...baseConfig,
-          positivePrompt: variation.prompt
-        }
-      };
-
-      const savedPrompt = await this.promptsManager.add(prompt);
-      saved.push(savedPrompt);
-    }
-    return saved;
-  }
-
-  generateTitle(variation) {
-    // 変数値から自動タイトル生成
-    const values = Object.values(variation.variables);
-    return values.join(' - ');
-  }
-}
-```
-
-#### 高度な変数機能
-
-##### 1. 条件付き変数
-```javascript
-{
-  style: ["anime", "realistic"],
-  quality: {
-    "anime": "8k, cel shading, vibrant",
-    "realistic": "8k, photorealistic, sharp"
-  }
-}
-```
-
-##### 2. ランダムサンプリング
-```javascript
-// 全組み合わせから10件だけランダム抽出
-generator.generateRandom(10);
-```
-
-##### 3. ウェイト付き変数
-```javascript
-{
-  time: [
-    { value: "sunset", weight: 3 },  // 3倍の確率
-    { value: "sunrise", weight: 1 },
-    { value: "night", weight: 1 }
-  ]
-}
-```
+#### プロジェクトアーカイブ
+- 完了したプロジェクトをアーカイブ
+- アーカイブからの復元
+- アーカイブデータのエクスポート
 
 ### 実装チェックリスト
-- [ ] VariationGeneratorクラス実装
-- [ ] テンプレートエディタUI
-- [ ] 変数定義UI(動的追加/削除)
-- [ ] リアルタイムプレビュー
-- [ ] デカルト積計算
-- [ ] 一括プロンプト生成
-- [ ] 条件付き変数対応
-- [ ] ランダムサンプリング
-- [ ] バリエーション保存
+- [ ] ProjectManagerクラス実装
+- [ ] プロジェクトダッシュボードUI
+- [ ] プロジェクト選択サイドバー
+- [ ] プロジェクトフィルタリング
+- [ ] アーカイブ機能
+- [ ] プロジェクト統計情報表示
 
 ### 成果物
-- ✅ テンプレートから一括バリエーション生成
-- ✅ 最大数千パターンの自動生成
-- ✅ A/Bテスト用データセット作成
+- ✅ 複数プロジェクトの同時管理
+- ✅ プロジェクト切り替え機能
+- ✅ ダッシュボードでの進捗可視化
 
 ---
 
-## 🔬 Phase 5: 高度な機能
+## 🤖 Phase 4: AI連携強化 🔜 計画中
 
-### 5.1 プロンプト分析&最適化
+### 目的
+Claude/ChatGPTとのスムーズな連携
 
-#### 分析項目
-1. **曖昧な単語検出**
-   - "beautiful", "nice" → 具体的な表現を提案
+### 機能仕様
 
-2. **スタイル指定チェック**
-   - スタイル未指定 → 推奨スタイルを提案
+#### ワンクリックコピー強化
+- プロンプト+関連コンテキストを一括コピー
+- Markdown形式での出力
+- AI向けフォーマット最適化
 
-3. **品質キーワード充足度**
-   - "8k", "masterpiece" 等の有無
+#### プロンプトテンプレート変数展開
+- 変数の自動置換
+- プロジェクト情報の自動挿入
+- 日付・時刻の自動挿入
 
-4. **トークン使用率**
-   - 75トークン制限に対する使用率
-
-5. **ネガティブプロンプト推奨**
-   - スタイルに応じたNG要素提案
-
-#### 実装例
-```javascript
-class PromptAnalyzer {
-  analyze(prompt) {
-    const warnings = [];
-    const suggestions = [];
-
-    // 1. 曖昧な単語
-    const vagueWords = ['beautiful', 'nice', 'good', 'amazing', 'great'];
-    vagueWords.forEach(word => {
-      if (new RegExp(`\\b${word}\\b`, 'i').test(prompt)) {
-        warnings.push({
-          type: 'vague-word',
-          word,
-          message: `"${word}" は抽象的。具体的な表現を推奨`,
-          suggestion: this.getSuggestionForVagueWord(word)
-        });
-      }
-    });
-
-    // 2. スタイル指定
-    const styleKeywords = ['anime', 'realistic', 'oil painting', 'watercolor'];
-    if (!styleKeywords.some(s => prompt.toLowerCase().includes(s))) {
-      suggestions.push({
-        type: 'missing-style',
-        message: 'スタイル指定がありません',
-        options: ['anime style', 'photorealistic', 'oil painting']
-      });
-    }
-
-    // 3. 品質キーワード
-    const qualityKeywords = ['8k', 'masterpiece', 'highly detailed', 'sharp focus'];
-    const foundQuality = qualityKeywords.filter(q =>
-      prompt.toLowerCase().includes(q)
-    );
-    if (foundQuality.length < 2) {
-      suggestions.push({
-        type: 'quality-boost',
-        message: '品質キーワードの追加を推奨',
-        keywords: qualityKeywords.filter(q => !foundQuality.includes(q))
-      });
-    }
-
-    // 4. トークン数
-    const tokens = this.estimateTokens(prompt);
-    const tokenUsage = (tokens / 75) * 100;
-
-    return {
-      warnings,
-      suggestions,
-      stats: {
-        tokens,
-        tokenUsage: Math.round(tokenUsage),
-        characterCount: prompt.length
-      }
-    };
-  }
-
-  getSuggestionForVagueWord(word) {
-    const replacements = {
-      'beautiful': ['highly detailed', 'intricate design', 'elegant composition'],
-      'nice': ['well-composed', 'harmonious colors', 'balanced'],
-      'good': ['high quality', 'professional grade', 'well-executed']
-    };
-    return replacements[word] || [];
-  }
-
-  estimateTokens(text) {
-    // CLIP tokenizer の簡易推定
-    return Math.ceil(text.split(/[\s,]+/).length * 1.2);
-  }
-}
-```
-
-### 5.2 A/B比較ギャラリー
-
-#### 機能概要
-- 同じシード値で異なるプロンプトを比較
-- 生成画像の評価・レーティング
-- プロンプトの差分ハイライト
-
-#### データ構造
-```javascript
-{
-  id: "comparison-123",
-  name: "猫のスタイル比較",
-
-  variants: [
-    {
-      id: "variant-a",
-      name: "アニメ風",
-      promptId: "prompt-anime-cat",
-      seed: 12345,
-      generatedImage: "data:image/jpeg;base64,...",
-      rating: 4.5,
-      votes: { good: 12, bad: 2 }
-    },
-    {
-      id: "variant-b",
-      name: "リアル",
-      promptId: "prompt-realistic-cat",
-      seed: 12345,  // 同じシード
-      generatedImage: "data:image/jpeg;base64,...",
-      rating: 4.0,
-      votes: { good: 8, bad: 4 }
-    }
-  ],
-
-  createdAt: "2025-01-08T00:00:00.000Z"
-}
-```
-
-#### UI実装
-```html
-<div class="ab-comparison">
-  <div class="comparison-header">
-    <h2>猫のスタイル比較</h2>
-    <p>Seed: 12345</p>
-  </div>
-
-  <div class="comparison-grid">
-    <div class="variant-card">
-      <h3>Variant A: アニメ風</h3>
-      <img src="generated-a.jpg" alt="Anime Cat">
-
-      <div class="prompt-diff">
-        <span class="diff-remove">- photorealistic</span>
-        <span class="diff-add">+ anime style, cel shading</span>
-      </div>
-
-      <div class="rating">
-        ⭐⭐⭐⭐⭐ 4.5/5.0
-      </div>
-
-      <div class="vote-buttons">
-        <button class="btn-vote good">👍 Good (12)</button>
-        <button class="btn-vote bad">👎 Bad (2)</button>
-      </div>
-    </div>
-
-    <div class="variant-card">
-      <h3>Variant B: リアル</h3>
-      <img src="generated-b.jpg" alt="Realistic Cat">
-
-      <div class="prompt-diff">
-        <span class="diff-add">+ photorealistic, photograph</span>
-        <span class="diff-remove">- anime style</span>
-      </div>
-
-      <div class="rating">
-        ⭐⭐⭐⭐☆ 4.0/5.0
-      </div>
-
-      <div class="vote-buttons">
-        <button class="btn-vote good">👍 Good (8)</button>
-        <button class="btn-vote bad">👎 Bad (4)</button>
-      </div>
-    </div>
-  </div>
-</div>
-```
+#### AI応答の保存
+- AI応答をコンテキストとして保存
+- プロンプトとの関連付け
+- バージョン履歴管理
 
 ### 実装チェックリスト
-
-#### プロンプト分析
-- [ ] PromptAnalyzerクラス実装
-- [ ] 曖昧単語検出ロジック
-- [ ] スタイル・品質チェック
-- [ ] トークン推定アルゴリズム
-- [ ] 改善提案生成
-- [ ] 分析結果UI表示
-
-#### A/B比較
-- [ ] ComparisonManagerクラス実装
-- [ ] 比較セット作成UI
-- [ ] 差分ハイライト表示
-- [ ] レーティングシステム
-- [ ] 画像管理(Base64 or File API)
-- [ ] IndexedDBに比較データ保存
+- [ ] AI連携マネージャークラス実装
+- [ ] 一括コピー機能
+- [ ] Markdown出力最適化
+- [ ] 変数展開エンジン
+- [ ] AI応答保存機能
+- [ ] プロンプト-応答関連付け
 
 ### 成果物
-- ✅ 自動プロンプト最適化提案
-- ✅ 学習支援機能
-- ✅ A/Bテスト実験環境
+- ✅ AI連携のワークフロー最適化
+- ✅ プロンプト-応答の体系的管理
+- ✅ ナレッジの蓄積・再利用
+
+---
+
+## 🔬 Phase 5: 高度な機能 🔜 計画中
+
+### 5.1 ナレッジベース機能
+
+#### 機能概要
+- プロンプト・コンテキストの関連性マップ
+- よく使う組み合わせの自動提案
+- タグベースのナレッジグラフ
+
+### 5.2 バージョン管理
+
+#### 機能概要
+- プロンプト・コンテキストの履歴管理
+- 差分表示
+- 特定バージョンへの復元
+
+### 5.3 チーム共有機能
+
+#### 機能概要
+- JSONエクスポート/インポート拡張
+- プロジェクト単位での共有
+- テンプレートの共有
+
+### 実装チェックリスト
+- [ ] ナレッジグラフ実装
+- [ ] バージョン管理システム
+- [ ] 差分表示UI
+- [ ] 共有機能強化
+- [ ] チーム用エクスポート形式
+
+### 成果物
+- ✅ ナレッジの可視化・活用
+- ✅ 変更履歴の追跡
+- ✅ チームでのナレッジ共有
 
 ---
 
 ## 📚 補足資料
 
 ### 参考リンク
-- [Stable Diffusion Prompt Guide](https://stable-diffusion-art.com/prompt-guide/)
-- [AUTOMATIC1111 WebUI Documentation](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
-- [Civitai Prompts Database](https://civitai.com/)
+- [プロジェクトマネジメント知識体系ガイド(PMBOK)](https://www.pmi.org/pmbok-guide-standards)
+- [アジャイル開発手法](https://agilemanifesto.org/)
 
 ### 技術スタック
 - **フロントエンド:** Vite + Vanilla JS
@@ -1065,14 +632,15 @@ npm run preview
 
 | 指標 | 現在 | 目標 |
 |------|------|------|
-| プロンプト作成時間 | 5分/件 | 1分/件 |
-| バリエーション生成 | 手動1件 | 自動50件 |
-| プリセット適用率 | 0% | 70% |
-| ユーザー満足度 | - | 4.5/5.0 |
+| プロンプト作成時間 | 10分/件 | 2分/件 |
+| テンプレート利用率 | 0% | 80% |
+| プロジェクト管理効率 | - | 業務時間30%削減 |
+| ナレッジ再利用率 | - | 60% |
 
 ---
 
-**次のアクション:** Phase 0 (Vite移行)の着手
+**次のアクション:** Phase 2 (テンプレートライブラリ)の着手
 
 **更新履歴:**
-- 2025-01-08: 初版作成
+- 2025-10-08: Phase 1完了、ITプロジェクトマネージャー向けに全面改訂
+- 2025-01-08: ITプロジェクトマネージャー向けに初版作成

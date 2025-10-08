@@ -2,7 +2,6 @@
 import { openDB } from 'idb';
 import { marked } from 'marked';
 import { CognishelfApp } from './app.js';
-import { PromptMixerUI } from './modules/promptMixer/PromptMixerUI.js';
 import '../styles.css';
 
 // グローバルに公開(既存コードとの互換性のため)
@@ -13,7 +12,4 @@ window.marked = marked;
 document.addEventListener('DOMContentLoaded', async () => {
   window.app = new CognishelfApp();
   await window.app.init();
-
-  // PromptMixerUI初期化
-  window.promptMixerUI = new PromptMixerUI();
 });

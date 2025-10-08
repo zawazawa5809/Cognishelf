@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cognishelf - Stable Diffusion プロンプト管理</title>
+    <title>Cognishelf - PM用プロンプト管理</title>
     <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -165,46 +165,66 @@
                         <input type="text" id="prompt-folder" placeholder="フォルダ名を入力 (任意)">
                     </div>
 
-                    <!-- プロンプトミキサーセクション -->
-                    <div class="prompt-mixer-section">
-                        <div class="mixer-header">
-                            <h3>🎨 プロンプトミキサー</h3>
-                            <button type="button" class="btn btn-secondary btn-sm" id="toggle-mixer-btn">表示/非表示</button>
+                    <!-- PM設定セクション -->
+                    <div class="pm-config-section">
+                        <div class="pm-header">
+                            <h3>📊 プロジェクト管理設定</h3>
+                            <button type="button" class="btn btn-secondary btn-sm" id="toggle-pm-config-btn">表示/非表示</button>
                         </div>
-                        <div id="prompt-mixer-container" class="mixer-container" style="display: none;">
-                            <!-- レイヤーカテゴリタブ -->
-                            <div class="mixer-tabs">
-                                <button type="button" class="mixer-tab active" data-category="スタイル">スタイル</button>
-                                <button type="button" class="mixer-tab" data-category="品質">品質</button>
-                                <button type="button" class="mixer-tab" data-category="ライティング">ライティング</button>
-                                <button type="button" class="mixer-tab" data-category="構図">構図</button>
-                                <button type="button" class="mixer-tab" data-category="ネガティブ">ネガティブ</button>
+                        <div id="pm-config-container" class="pm-container" style="display: none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pm-project-name">プロジェクト名</label>
+                                    <input type="text" id="pm-project-name" placeholder="例: 新基幹システム構築">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pm-phase">フェーズ</label>
+                                    <select id="pm-phase">
+                                        <option>未分類</option>
+                                        <option>企画</option>
+                                        <option>要件定義</option>
+                                        <option>設計</option>
+                                        <option>開発</option>
+                                        <option>テスト</option>
+                                        <option>リリース</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <!-- レイヤー一覧 -->
-                            <div id="mixer-layers-container" class="mixer-layers">
-                                <!-- レイヤーがここに動的に追加されます -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pm-priority">優先度</label>
+                                    <select id="pm-priority">
+                                        <option>高</option>
+                                        <option selected>中</option>
+                                        <option>低</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pm-status">ステータス</label>
+                                    <select id="pm-status">
+                                        <option selected>下書き</option>
+                                        <option>進行中</option>
+                                        <option>完了</option>
+                                        <option>保留</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            <!-- リアルタイムプレビュー -->
-                            <div class="mixer-preview">
-                                <div class="preview-header">
-                                    <h4>プレビュー</h4>
-                                    <div class="preview-stats">
-                                        <span id="preview-token-count" class="token-badge">トークン: 0</span>
-                                    </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pm-importance">重要度 (1-5)</label>
+                                    <input type="number" id="pm-importance" min="1" max="5" value="3">
                                 </div>
-                                <div class="preview-content">
-                                    <div class="preview-section">
-                                        <label>ポジティブプロンプト:</label>
-                                        <pre id="preview-positive" class="preview-text"></pre>
-                                    </div>
-                                    <div class="preview-section">
-                                        <label>ネガティブプロンプト:</label>
-                                        <pre id="preview-negative" class="preview-text"></pre>
-                                    </div>
+                                <div class="form-group">
+                                    <label for="pm-due-date">期限</label>
+                                    <input type="date" id="pm-due-date">
                                 </div>
-                                <button type="button" class="btn btn-primary btn-sm" id="apply-mixer-btn">ミキサー結果を適用</button>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="pm-stakeholders">ステークホルダー (カンマ区切り)</label>
+                                <input type="text" id="pm-stakeholders" placeholder="例: 山田太郎(PO), 佐藤花子(開発リーダー)">
                             </div>
                         </div>
                     </div>
@@ -247,6 +267,47 @@
                         <label for="context-folder">フォルダ</label>
                         <input type="text" id="context-folder" placeholder="フォルダ名を入力 (任意)">
                     </div>
+
+                    <!-- PM設定セクション -->
+                    <div class="pm-config-section">
+                        <div class="pm-header">
+                            <h3>📊 プロジェクト管理設定</h3>
+                            <button type="button" class="btn btn-secondary btn-sm" id="toggle-context-pm-config-btn">表示/非表示</button>
+                        </div>
+                        <div id="context-pm-config-container" class="pm-container" style="display: none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="context-pm-project-name">プロジェクト名</label>
+                                    <input type="text" id="context-pm-project-name" placeholder="例: 新基幹システム構築">
+                                </div>
+                                <div class="form-group">
+                                    <label for="context-pm-type">コンテキスト種別</label>
+                                    <select id="context-pm-type">
+                                        <option>背景情報</option>
+                                        <option>技術仕様</option>
+                                        <option>制約条件</option>
+                                        <option>リスク</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="context-pm-visibility">公開範囲</label>
+                                    <select id="context-pm-visibility">
+                                        <option>個人</option>
+                                        <option>チーム全体</option>
+                                        <option>ステークホルダー</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="context-pm-version">バージョン</label>
+                                    <input type="text" id="context-pm-version" value="1.0" placeholder="例: 1.0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
                         <button type="submit" class="btn btn-primary">保存</button>

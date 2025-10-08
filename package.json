@@ -1,7 +1,7 @@
 {
   "name": "cognishelf",
   "version": "2.0.0",
-  "description": "Stable Diffusion用プロンプト管理・最適化ツール",
+  "description": "ITプロジェクトマネージャー向けプロンプト・コンテキスト管理ツール",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,10 +16,12 @@
     "vite": "^5.0.11"
   },
   "keywords": [
-    "stable-diffusion",
+    "project-management",
     "prompt",
     "ai",
-    "image-generation"
+    "claude",
+    "chatgpt",
+    "context-management"
   ],
   "author": "",
   "license": "MIT"

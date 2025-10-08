@@ -72,7 +72,7 @@ class StorageManager extends StorageInterface {
 
 // IndexedDB版StorageManager
 class IndexedDBManager extends StorageInterface {
-    constructor(dbName, storeName, version = 1) {
+    constructor(dbName, storeName, version = 2) {
         super();
         this.dbName = dbName;
         this.storeName = storeName;
@@ -108,6 +108,63 @@ class IndexedDBManager extends StorageInterface {
                     const folderStore = db.createObjectStore('folders', { keyPath: 'id' });
                     folderStore.createIndex('name', 'name', { unique: false });
                     folderStore.createIndex('type', 'type', { unique: false });
+                }
+
+                // Phase 1: PM特化基盤 - projects Object Store
+                if (!db.objectStoreNames.contains('projects')) {
+                    const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
+                    projectStore.createIndex('name', 'name', { unique: false });
+                    projectStore.createIndex('currentPhase', 'currentPhase', { unique: false });
+                    projectStore.createIndex('startDate', 'startDate', { unique: false });
+                }
+
+                // Phase 1: マイグレーション - 既存プロンプトにpmConfigフィールド追加
+                if (oldVersion < 2 && transaction.objectStoreNames.contains('prompts')) {
+                    const promptStore = transaction.objectStore('prompts');
+                    promptStore.getAll().then(prompts => {
+                        prompts.forEach(prompt => {
+                            if (!prompt.pmConfig) {
+                                prompt.pmConfig = {
+                                    projectId: null,
+                                    projectName: "",
+                                    phase: "未分類",
+                                    stakeholders: [],
+                                    relatedDocs: [],
+                                    priority: "中",
+                                    importance: 3,
+                                    status: "下書き",
+                                    dueDate: null,
+                                    stats: {
+                                        usageCount: 0,
+                                        lastUsed: null,
+                                        effectiveness: 0
+                                    }
+                                };
+                                promptStore.put(prompt);
+                            }
+                        });
+                    }).catch(err => console.error('Prompt migration failed:', err));
+                }
+
+                // Phase 1: マイグレーション - 既存コンテキストにpmConfigフィールド追加
+                if (oldVersion < 2 && transaction.objectStoreNames.contains('contexts')) {
+                    const contextStore = transaction.objectStore('contexts');
+                    contextStore.getAll().then(contexts => {
+                        contexts.forEach(context => {
+                            if (!context.pmConfig) {
+                                context.pmConfig = {
+                                    projectId: null,
+                                    projectName: "",
+                                    contextType: "背景情報",
+                                    visibility: "個人",
+                                    version: "1.0",
+                                    previousVersionId: null,
+                                    relatedPrompts: []
+                                };
+                                contextStore.put(context);
+                            }
+                        });
+                    }).catch(err => console.error('Context migration failed:', err));
                 }
             }
         });
@@ -369,6 +426,31 @@ class CognishelfApp {
             e.preventDefault();
             this.saveContext();
         });
+
+        // PM設定セクションの表示/非表示
+        const togglePmConfigBtn = document.getElementById('toggle-pm-config-btn');
+        if (togglePmConfigBtn) {
+            togglePmConfigBtn.addEventListener('click', () => {
+                const container = document.getElementById('pm-config-container');
+                if (container.style.display === 'none') {
+                    container.style.display = 'block';
+                } else {
+                    container.style.display = 'none';
+                }
+            });
+        }
+
+        const toggleContextPmConfigBtn = document.getElementById('toggle-context-pm-config-btn');
+        if (toggleContextPmConfigBtn) {
+            toggleContextPmConfigBtn.addEventListener('click', () => {
+                const container = document.getElementById('context-pm-config-container');
+                if (container.style.display === 'none') {
+                    container.style.display = 'block';
+                } else {
+                    container.style.display = 'none';
+                }
+            });
+        }
 
         // 検索機能
         document.getElementById('prompt-search').addEventListener('input', (e) => {
@@ -771,6 +853,27 @@ class CognishelfApp {
                     document.getElementById('prompt-folder').value = '';
                 }
 
+                // PM設定を読み込み
+                if (prompt.pmConfig) {
+                    const pm = prompt.pmConfig;
+                    document.getElementById('pm-project-name').value = pm.projectName || '';
+                    document.getElementById('pm-phase').value = pm.phase || '未分類';
+                    document.getElementById('pm-priority').value = pm.priority || '中';
+                    document.getElementById('pm-status').value = pm.status || '下書き';
+                    document.getElementById('pm-importance').value = pm.importance || 3;
+                    document.getElementById('pm-due-date').value = pm.dueDate || '';
+
+                    // ステークホルダーをテキストに変換
+                    if (pm.stakeholders && pm.stakeholders.length > 0) {
+                        const stakeholdersText = pm.stakeholders.map(s => {
+                            return s.role ? `${s.name}(${s.role})` : s.name;
+                        }).join(', ');
+                        document.getElementById('pm-stakeholders').value = stakeholdersText;
+                    } else {
+                        document.getElementById('pm-stakeholders').value = '';
+                    }
+                }
+
                 this.editingItem = promptId;
             }
         } else {
@@ -804,6 +907,55 @@ class CognishelfApp {
         } else {
             promptData.folder = null;
         }
+
+        // PM設定処理
+        const pmProjectName = document.getElementById('pm-project-name')?.value.trim();
+        const pmPhase = document.getElementById('pm-phase')?.value;
+        const pmPriority = document.getElementById('pm-priority')?.value;
+        const pmStatus = document.getElementById('pm-status')?.value;
+        const pmImportance = parseInt(document.getElementById('pm-importance')?.value || "3", 10);
+        const pmDueDate = document.getElementById('pm-due-date')?.value || null;
+        const pmStakeholders = document.getElementById('pm-stakeholders')?.value.trim() || "";
+
+        // 既存データがあればpmConfigを保持、なければデフォルト作成
+        const existingData = this.editingItem ? await this.promptsManager.findById(this.editingItem) : null;
+        const pmConfig = existingData?.pmConfig || {
+            projectId: null,
+            projectName: "",
+            phase: "未分類",
+            stakeholders: [],
+            relatedDocs: [],
+            priority: "中",
+            importance: 3,
+            status: "下書き",
+            dueDate: null,
+            stats: {
+                usageCount: 0,
+                lastUsed: null,
+                effectiveness: 0
+            }
+        };
+
+        // PM設定を更新
+        pmConfig.projectName = pmProjectName || pmConfig.projectName;
+        pmConfig.phase = pmPhase || pmConfig.phase;
+        pmConfig.priority = pmPriority || pmConfig.priority;
+        pmConfig.status = pmStatus || pmConfig.status;
+        pmConfig.importance = pmImportance;
+        pmConfig.dueDate = pmDueDate;
+
+        // ステークホルダーをパース
+        if (pmStakeholders) {
+            pmConfig.stakeholders = pmStakeholders.split(',').map(s => {
+                const match = s.trim().match(/^(.+?)\((.+?)\)$/);
+                if (match) {
+                    return { name: match[1].trim(), role: match[2].trim(), email: "" };
+                }
+                return { name: s.trim(), role: "", email: "" };
+            });
+        }
+
+        promptData.pmConfig = pmConfig;
 
         if (this.editingItem) {
             await this.promptsManager.update(this.editingItem, promptData);
@@ -941,6 +1093,15 @@ class CognishelfApp {
                     document.getElementById('context-folder').value = '';
                 }
 
+                // PM設定を読み込み
+                if (context.pmConfig) {
+                    const pm = context.pmConfig;
+                    document.getElementById('context-pm-project-name').value = pm.projectName || '';
+                    document.getElementById('context-pm-type').value = pm.contextType || '背景情報';
+                    document.getElementById('context-pm-visibility').value = pm.visibility || '個人';
+                    document.getElementById('context-pm-version').value = pm.version || '1.0';
+                }
+
                 this.editingItem = contextId;
             }
         } else {
@@ -981,6 +1142,32 @@ class CognishelfApp {
         } else {
             contextData.folder = null;
         }
+
+        // PM設定処理
+        const pmProjectName = document.getElementById('context-pm-project-name')?.value.trim();
+        const pmType = document.getElementById('context-pm-type')?.value;
+        const pmVisibility = document.getElementById('context-pm-visibility')?.value;
+        const pmVersion = document.getElementById('context-pm-version')?.value.trim();
+
+        // 既存データがあればpmConfigを保持、なければデフォルト作成
+        const existingData = this.editingItem ? await this.contextsManager.findById(this.editingItem) : null;
+        const pmConfig = existingData?.pmConfig || {
+            projectId: null,
+            projectName: "",
+            contextType: "背景情報",
+            visibility: "個人",
+            version: "1.0",
+            previousVersionId: null,
+            relatedPrompts: []
+        };
+
+        // PM設定を更新
+        pmConfig.projectName = pmProjectName || pmConfig.projectName;
+        pmConfig.contextType = pmType || pmConfig.contextType;
+        pmConfig.visibility = pmVisibility || pmConfig.visibility;
+        pmConfig.version = pmVersion || pmConfig.version;
+
+        contextData.pmConfig = pmConfig;
 
         if (this.editingItem) {
             await this.contextsManager.update(this.editingItem, contextData);
