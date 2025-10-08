@@ -32,10 +32,18 @@
             <section id="prompts-section" class="content-section active">
                 <div class="content-with-sidebar">
                     <aside class="folders-sidebar">
-                        <h3 class="sidebar-title">フォルダ</h3>
-                        <ul id="prompt-folders" class="folders-list">
-                            <!-- フォルダアイテムが動的に追加されます -->
-                        </ul>
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">フォルダ</h3>
+                            <ul id="prompt-folders" class="folders-list">
+                                <!-- フォルダアイテムが動的に追加されます -->
+                            </ul>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">タグ</h3>
+                            <ul id="prompt-tags" class="tags-list">
+                                <!-- タグフィルタが動的に追加されます -->
+                            </ul>
+                        </div>
                     </aside>
 
                     <div class="content-main">
@@ -56,6 +64,13 @@
                                     <option value="title-desc">タイトル (Z→A)</option>
                                 </select>
                             </div>
+                            <div class="group-box">
+                                <select id="prompt-grouping" class="sort-select">
+                                    <option value="none">グループ化: なし</option>
+                                    <option value="folder">フォルダでグループ化</option>
+                                    <option value="tag">タグでグループ化</option>
+                                </select>
+                            </div>
                             <div class="toolbar-actions">
                                 <button type="button" class="btn btn-secondary json-export-btn" id="prompt-export-btn">JSONエクスポート</button>
                                 <label for="json-import-input" class="btn btn-secondary json-import-label">JSONインポート</label>
@@ -73,10 +88,18 @@
             <section id="contexts-section" class="content-section">
                 <div class="content-with-sidebar">
                     <aside class="folders-sidebar">
-                        <h3 class="sidebar-title">フォルダ</h3>
-                        <ul id="context-folders" class="folders-list">
-                            <!-- フォルダアイテムが動的に追加されます -->
-                        </ul>
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">フォルダ</h3>
+                            <ul id="context-folders" class="folders-list">
+                                <!-- フォルダアイテムが動的に追加されます -->
+                            </ul>
+                        </div>
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">タグ</h3>
+                            <ul id="context-tags" class="tags-list">
+                                <!-- タグフィルタが動的に追加されます -->
+                            </ul>
+                        </div>
                     </aside>
 
                     <div class="content-main">
@@ -95,6 +118,14 @@
                                     <option value="date-asc">作成日 (古い順)</option>
                                     <option value="title-asc">タイトル (A→Z)</option>
                                     <option value="title-desc">タイトル (Z→A)</option>
+                                </select>
+                            </div>
+                            <div class="group-box">
+                                <select id="context-grouping" class="sort-select">
+                                    <option value="none">グループ化: なし</option>
+                                    <option value="folder">フォルダでグループ化</option>
+                                    <option value="category">カテゴリでグループ化</option>
+                                    <option value="tag">タグでグループ化</option>
                                 </select>
                             </div>
                             <div class="toolbar-actions">
@@ -166,6 +197,10 @@
                     <div class="form-group">
                         <label for="context-category">カテゴリ</label>
                         <input type="text" id="context-category" placeholder="例: 技術知識, ビジネス, デザイン">
+                    </div>
+                    <div class="form-group">
+                        <label for="context-tags">タグ (カンマ区切り)</label>
+                        <input type="text" id="context-tags" placeholder="例: テンプレート, ガイド, チーム共有">
                     </div>
                     <div class="form-group">
                         <label for="context-folder">フォルダ</label>

@@ -2,6 +2,8 @@
 // データモデル
 // ========================================
 
+const UNTAGGED_FILTER = '__untagged__';
+
 // ストレージインターフェース(抽象クラス)
 class StorageInterface {
     async getAll() { throw new Error('Not implemented'); }
@@ -248,6 +250,12 @@ class CognishelfApp {
         this.currentContextFolder = null;
         this.previewItem = null;
         this.previewType = null;
+        this.promptSearchQuery = '';
+        this.contextSearchQuery = '';
+        this.currentPromptTag = null;
+        this.currentContextTag = null;
+        this.currentPromptGrouping = 'none';
+        this.currentContextGrouping = 'none';
     }
 
     async init() {
@@ -258,9 +266,19 @@ class CognishelfApp {
             this.foldersManager = await StorageAdapter.createManager('folders', 'cognishelf-folders');
 
             this.setupEventListeners();
+            const promptGroupingSelect = document.getElementById('prompt-grouping');
+            if (promptGroupingSelect) {
+                promptGroupingSelect.value = this.currentPromptGrouping;
+            }
+            const contextGroupingSelect = document.getElementById('context-grouping');
+            if (contextGroupingSelect) {
+                contextGroupingSelect.value = this.currentContextGrouping;
+            }
             await this.initializeSampleData();
             await this.renderFolders('prompt');
             await this.renderFolders('context');
+            await this.renderTagFilters('prompt');
+            await this.renderTagFilters('context');
             await this.renderPrompts();
             await this.renderContexts();
 
@@ -639,7 +657,11 @@ class CognishelfApp {
             ];
 
             for (const sample of contextSamples) {
-                await this.contextsManager.add(sample);
+                const contextData = { ...sample };
+                if (contextData.category) {
+                    contextData.tags = [contextData.category];
+                }
+                await this.contextsManager.add(contextData);
             }
         }
     }
@@ -707,6 +729,22 @@ class CognishelfApp {
             this.currentContextSort = e.target.value;
             this.renderContexts();
         });
+
+        const promptGroupingSelect = document.getElementById('prompt-grouping');
+        if (promptGroupingSelect) {
+            promptGroupingSelect.addEventListener('change', (e) => {
+                this.currentPromptGrouping = e.target.value;
+                this.renderPrompts();
+            });
+        }
+
+        const contextGroupingSelect = document.getElementById('context-grouping');
+        if (contextGroupingSelect) {
+            contextGroupingSelect.addEventListener('change', (e) => {
+                this.currentContextGrouping = e.target.value;
+                this.renderContexts();
+            });
+        }
 
         document.querySelectorAll('.json-export-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -905,7 +943,25 @@ class CognishelfApp {
                 };
 
                 if (context.category && typeof context.category === 'string') {
-                    contextData.category = context.category.trim();
+                    const categoryValue = context.category.trim();
+                    if (categoryValue) {
+                        contextData.category = categoryValue;
+                    }
+                }
+
+                if (Array.isArray(context.tags)) {
+                    const tags = context.tags
+                        .map(tag => typeof tag === 'string' ? tag.trim() : '')
+                        .filter(tag => tag);
+                    contextData.tags = tags;
+                } else if (typeof context.tags === 'string' && context.tags.trim()) {
+                    const tags = context.tags
+                        .split(',')
+                        .map(tag => tag.trim())
+                        .filter(tag => tag);
+                    contextData.tags = tags;
+                } else {
+                    contextData.tags = [];
                 }
 
                 if (context.folder && folderIdMap[context.folder]) {
@@ -918,6 +974,8 @@ class CognishelfApp {
 
             await this.renderFolders('prompt');
             await this.renderFolders('context');
+            await this.renderTagFilters('prompt');
+            await this.renderTagFilters('context');
             await this.renderPrompts();
             await this.renderContexts();
 
@@ -955,10 +1013,24 @@ class CognishelfApp {
         return sorted;
     }
 
-    async renderPrompts(items = null) {
-        let prompts = items || await this.promptsManager.getAll();
+    async renderPrompts() {
+        let prompts = await this.promptsManager.getAll();
 
-        // フォルダフィルタ適用
+        if (this.promptSearchQuery) {
+            const query = this.promptSearchQuery.toLowerCase();
+            prompts = prompts.filter(prompt => {
+                const tagText = Array.isArray(prompt.tags) ? prompt.tags.join(' ') : '';
+                const searchStr = `${prompt.title} ${prompt.content} ${tagText}`.toLowerCase();
+                return searchStr.includes(query);
+            });
+        }
+
+        if (this.currentPromptTag === UNTAGGED_FILTER) {
+            prompts = prompts.filter(prompt => !prompt.tags || prompt.tags.length === 0);
+        } else if (this.currentPromptTag) {
+            prompts = prompts.filter(prompt => Array.isArray(prompt.tags) && prompt.tags.includes(this.currentPromptTag));
+        }
+
         if (this.currentPromptFolder === 'uncategorized') {
             prompts = prompts.filter(p => !p.folder);
         } else if (this.currentPromptFolder) {
@@ -968,15 +1040,31 @@ class CognishelfApp {
         prompts = this.sortItems(prompts, this.currentPromptSort);
 
         const grid = document.getElementById('prompts-grid');
+        if (!grid) return;
+
+        const shouldGroup = this.currentPromptGrouping && this.currentPromptGrouping !== 'none';
+        grid.classList.toggle('is-grouped', Boolean(shouldGroup));
 
         if (prompts.length === 0) {
-            grid.innerHTML = this.renderEmptyState('', 'プロンプトがありません', '新規プロンプトを追加してください');
+            grid.classList.remove('is-grouped');
+            const hasFilters = Boolean(
+                this.promptSearchQuery ||
+                this.currentPromptFolder ||
+                this.currentPromptTag
+            );
+            const title = hasFilters ? '条件に一致するプロンプトがありません' : 'プロンプトがありません';
+            const description = hasFilters ? '検索条件やフィルタを調整してください。' : '新規プロンプトを追加してください';
+            grid.innerHTML = this.renderEmptyState('', title, description);
             return;
         }
 
-        grid.innerHTML = prompts.map(prompt => this.createPromptCard(prompt)).join('');
+        if (shouldGroup) {
+            const groups = await this.groupItems(prompts, 'prompt', this.currentPromptGrouping);
+            grid.innerHTML = this.renderGroupedItems(groups, 'prompt');
+        } else {
+            grid.innerHTML = prompts.map(prompt => this.createPromptCard(prompt)).join('');
+        }
 
-        // イベントリスナーを追加
         this.attachCardEventListeners('prompt');
     }
 
@@ -1053,6 +1141,8 @@ class CognishelfApp {
         if (folderName) {
             const folder = await this.getOrCreateFolder(folderName, 'prompt');
             promptData.folder = folder.id;
+        } else {
+            promptData.folder = null;
         }
 
         if (this.editingItem) {
@@ -1064,27 +1154,38 @@ class CognishelfApp {
         }
 
         await this.renderFolders('prompt');
+        await this.renderTagFilters('prompt');
         await this.renderPrompts();
         this.closeAllModals();
     }
 
     async searchPrompts(query) {
-        const prompts = await this.promptsManager.getAll();
-        const filtered = prompts.filter(prompt => {
-            const searchStr = `${prompt.title} ${prompt.content} ${prompt.tags?.join(' ')}`.toLowerCase();
-            return searchStr.includes(query.toLowerCase());
-        });
-        this.renderPrompts(filtered);
+        this.promptSearchQuery = query;
+        await this.renderPrompts();
     }
 
     // ========================================
     // コンテキスト管理
     // ========================================
 
-    async renderContexts(items = null) {
-        let contexts = items || await this.contextsManager.getAll();
+    async renderContexts() {
+        let contexts = await this.contextsManager.getAll();
 
-        // フォルダフィルタ適用
+        if (this.contextSearchQuery) {
+            const query = this.contextSearchQuery.toLowerCase();
+            contexts = contexts.filter(context => {
+                const tagText = Array.isArray(context.tags) ? context.tags.join(' ') : '';
+                const searchStr = `${context.title} ${context.content} ${context.category || ''} ${tagText}`.toLowerCase();
+                return searchStr.includes(query);
+            });
+        }
+
+        if (this.currentContextTag === UNTAGGED_FILTER) {
+            contexts = contexts.filter(context => !context.tags || context.tags.length === 0);
+        } else if (this.currentContextTag) {
+            contexts = contexts.filter(context => Array.isArray(context.tags) && context.tags.includes(this.currentContextTag));
+        }
+
         if (this.currentContextFolder === 'uncategorized') {
             contexts = contexts.filter(c => !c.folder);
         } else if (this.currentContextFolder) {
@@ -1094,22 +1195,52 @@ class CognishelfApp {
         contexts = this.sortItems(contexts, this.currentContextSort);
 
         const grid = document.getElementById('contexts-grid');
+        if (!grid) return;
+
+        const shouldGroup = this.currentContextGrouping && this.currentContextGrouping !== 'none';
+        grid.classList.toggle('is-grouped', Boolean(shouldGroup));
 
         if (contexts.length === 0) {
-            grid.innerHTML = this.renderEmptyState('', 'コンテキストがありません', '新規コンテキストを追加してください');
+            grid.classList.remove('is-grouped');
+            const hasFilters = Boolean(
+                this.contextSearchQuery ||
+                this.currentContextFolder ||
+                this.currentContextTag
+            );
+            const title = hasFilters ? '条件に一致するコンテキストがありません' : 'コンテキストがありません';
+            const description = hasFilters ? '検索条件やフィルタを調整してください。' : '新規コンテキストを追加してください';
+            grid.innerHTML = this.renderEmptyState('', title, description);
             return;
         }
 
-        grid.innerHTML = contexts.map(context => this.createContextCard(context)).join('');
+        if (shouldGroup) {
+            const groups = await this.groupItems(contexts, 'context', this.currentContextGrouping);
+            grid.innerHTML = this.renderGroupedItems(groups, 'context');
+        } else {
+            grid.innerHTML = contexts.map(context => this.createContextCard(context)).join('');
+        }
 
-        // イベントリスナーを追加
         this.attachCardEventListeners('context');
     }
 
     createContextCard(context) {
-        const category = context.category ?
-            `<span class="tag">${this.escapeHtml(context.category)}</span>` :
-            '';
+        const tagElements = [];
+
+        if (context.category) {
+            tagElements.push(`<span class="tag tag-category">${this.escapeHtml(context.category)}</span>`);
+        }
+
+        if (Array.isArray(context.tags)) {
+            const uniqueTags = Array.from(new Set(context.tags
+                .map(tag => typeof tag === 'string' ? tag.trim() : '')
+                .filter(tag => tag)));
+            const filteredTags = context.category ? uniqueTags.filter(tag => tag !== context.category) : uniqueTags;
+            for (const tag of filteredTags) {
+                tagElements.push(`<span class="tag">${this.escapeHtml(tag)}</span>`);
+            }
+        }
+
+        const tagsHtml = tagElements.length > 0 ? `<div class="card-tags">${tagElements.join('')}</div>` : '';
 
         return `
             <div class="card" data-id="${context.id}" data-type="context">
@@ -1118,7 +1249,7 @@ class CognishelfApp {
                     <div class="card-meta">${this.formatDate(context.createdAt)}</div>
                 </div>
                 <div class="card-content markdown-content">${this.renderMarkdown(context.content)}</div>
-                ${category ? `<div class="card-tags">${category}</div>` : ''}
+                ${tagsHtml}
                 <div class="card-actions">
                     <button class="btn btn-small btn-success copy-btn" data-id="${context.id}" data-type="context">
                         コピー
@@ -1140,6 +1271,7 @@ class CognishelfApp {
                 document.getElementById('context-title').value = context.title;
                 document.getElementById('context-content').value = context.content;
                 document.getElementById('context-category').value = context.category || '';
+                document.getElementById('context-tags').value = Array.isArray(context.tags) ? context.tags.join(', ') : '';
 
                 // フォルダ名取得
                 if (context.folder) {
@@ -1165,6 +1297,7 @@ class CognishelfApp {
         const title = document.getElementById('context-title').value.trim();
         const content = document.getElementById('context-content').value.trim();
         const category = document.getElementById('context-category').value.trim();
+        const tagsInput = document.getElementById('context-tags').value.trim();
         const folderName = document.getElementById('context-folder').value.trim();
 
         if (!title || !content) {
@@ -1172,12 +1305,21 @@ class CognishelfApp {
             return;
         }
 
-        const contextData = { title, content, category };
+        const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
+
+        const contextData = {
+            title,
+            content,
+            category: category || null,
+            tags
+        };
 
         // フォルダ処理
         if (folderName) {
             const folder = await this.getOrCreateFolder(folderName, 'context');
             contextData.folder = folder.id;
+        } else {
+            contextData.folder = null;
         }
 
         if (this.editingItem) {
@@ -1189,17 +1331,14 @@ class CognishelfApp {
         }
 
         await this.renderFolders('context');
+        await this.renderTagFilters('context');
         await this.renderContexts();
         this.closeAllModals();
     }
 
     async searchContexts(query) {
-        const contexts = await this.contextsManager.getAll();
-        const filtered = contexts.filter(context => {
-            const searchStr = `${context.title} ${context.content} ${context.category || ''}`.toLowerCase();
-            return searchStr.includes(query.toLowerCase());
-        });
-        this.renderContexts(filtered);
+        this.contextSearchQuery = query;
+        await this.renderContexts();
     }
 
     // ========================================
@@ -1225,6 +1364,109 @@ class CognishelfApp {
     filterByFolder(items, folderId) {
         if (!folderId) return items;
         return items.filter(item => item.folder === folderId);
+    }
+
+    async renderTagFilters(type) {
+        const containerId = type === 'prompt' ? 'prompt-tags' : 'context-tags';
+        const container = document.getElementById(containerId);
+
+        if (!container) return;
+
+        const manager = type === 'prompt' ? this.promptsManager : this.contextsManager;
+        const items = await manager.getAll();
+
+        const tagCounts = new Map();
+        let untaggedCount = 0;
+
+        for (const item of items) {
+            const tags = Array.isArray(item.tags)
+                ? item.tags.map(tag => typeof tag === 'string' ? tag.trim() : '').filter(tag => tag)
+                : [];
+
+            if (tags.length === 0) {
+                untaggedCount += 1;
+            } else {
+                for (const tag of tags) {
+                    tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+                }
+            }
+        }
+
+        if (type === 'prompt') {
+            if (this.currentPromptTag === UNTAGGED_FILTER && untaggedCount === 0) {
+                this.currentPromptTag = null;
+            } else if (this.currentPromptTag && this.currentPromptTag !== UNTAGGED_FILTER && !tagCounts.has(this.currentPromptTag)) {
+                this.currentPromptTag = null;
+            }
+        } else {
+            if (this.currentContextTag === UNTAGGED_FILTER && untaggedCount === 0) {
+                this.currentContextTag = null;
+            } else if (this.currentContextTag && this.currentContextTag !== UNTAGGED_FILTER && !tagCounts.has(this.currentContextTag)) {
+                this.currentContextTag = null;
+            }
+        }
+
+        const activeTag = type === 'prompt' ? this.currentPromptTag : this.currentContextTag;
+        const totalCount = items.length;
+        const tagEntries = Array.from(tagCounts.entries()).sort((a, b) => a[0].localeCompare(b[0], 'ja'));
+
+        const parts = [];
+        parts.push(`
+            <li class="tag-filter-item ${!activeTag ? 'active' : ''}" data-tag="">
+                <span class="tag-name">すべて</span>
+                <span class="tag-count">${totalCount}</span>
+            </li>
+        `);
+
+        if (untaggedCount > 0) {
+            parts.push(`
+                <li class="tag-filter-item ${activeTag === UNTAGGED_FILTER ? 'active' : ''}" data-tag="${UNTAGGED_FILTER}">
+                    <span class="tag-name">タグなし</span>
+                    <span class="tag-count">${untaggedCount}</span>
+                </li>
+            `);
+        }
+
+        for (const [tag, count] of tagEntries) {
+            const isActive = activeTag === tag;
+            parts.push(`
+                <li class="tag-filter-item ${isActive ? 'active' : ''}" data-tag="${this.escapeHtml(tag)}">
+                    <span class="tag-name">#${this.escapeHtml(tag)}</span>
+                    <span class="tag-count">${count}</span>
+                </li>
+            `);
+        }
+
+        container.innerHTML = parts.join('');
+
+        container.querySelectorAll('.tag-filter-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const value = item.dataset.tag;
+                let selectedTag = null;
+
+                if (value === UNTAGGED_FILTER) {
+                    selectedTag = UNTAGGED_FILTER;
+                } else if (value) {
+                    selectedTag = value;
+                }
+
+                if (type === 'prompt') {
+                    this.currentPromptTag = selectedTag;
+                } else {
+                    this.currentContextTag = selectedTag;
+                }
+
+                container.querySelectorAll('.tag-filter-item').forEach(el => {
+                    el.classList.toggle('active', el === item);
+                });
+
+                if (type === 'prompt') {
+                    this.renderPrompts();
+                } else {
+                    this.renderContexts();
+                }
+            });
+        });
     }
 
     async renderFolders(type) {
@@ -1273,6 +1515,134 @@ class CognishelfApp {
                 }
             });
         });
+    }
+
+    async groupItems(items, type, grouping) {
+        switch (grouping) {
+            case 'folder':
+                return this.groupByFolder(items, type);
+            case 'tag':
+                return this.groupByTag(items);
+            case 'category':
+                return this.groupByCategory(items);
+            default:
+                return [];
+        }
+    }
+
+    async groupByFolder(items, type) {
+        const folders = await this.getFolders(type);
+        const folderMap = new Map(folders.map(folder => [folder.id, folder.name]));
+        const groups = new Map();
+
+        for (const item of items) {
+            let key = 'uncategorized';
+            let label = '未分類';
+
+            if (item.folder) {
+                if (folderMap.has(item.folder)) {
+                    key = item.folder;
+                    label = folderMap.get(item.folder);
+                } else {
+                    key = 'missing-folder';
+                    label = 'フォルダ未設定';
+                }
+            }
+
+            if (!groups.has(key)) {
+                groups.set(key, { key, label, items: [] });
+            }
+
+            groups.get(key).items.push(item);
+        }
+
+        const sorted = Array.from(groups.values());
+        sorted.sort((a, b) => {
+            if (a.key === 'uncategorized') return 1;
+            if (b.key === 'uncategorized') return -1;
+            return a.label.localeCompare(b.label, 'ja');
+        });
+
+        return sorted;
+    }
+
+    groupByTag(items) {
+        const groups = new Map();
+        const untagged = [];
+
+        for (const item of items) {
+            const tags = Array.isArray(item.tags)
+                ? item.tags.map(tag => typeof tag === 'string' ? tag.trim() : '').filter(tag => tag)
+                : [];
+
+            if (tags.length === 0) {
+                untagged.push(item);
+                continue;
+            }
+
+            for (const tag of tags) {
+                if (!groups.has(tag)) {
+                    groups.set(tag, { key: tag, label: tag, items: [] });
+                }
+                groups.get(tag).items.push(item);
+            }
+        }
+
+        const sorted = Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+        if (untagged.length > 0) {
+            sorted.push({ key: UNTAGGED_FILTER, label: 'タグなし', items: untagged });
+        }
+        return sorted;
+    }
+
+    groupByCategory(items) {
+        const groups = new Map();
+        const uncategorized = [];
+
+        for (const item of items) {
+            const category = typeof item.category === 'string' ? item.category.trim() : '';
+            if (!category) {
+                uncategorized.push(item);
+                continue;
+            }
+
+            if (!groups.has(category)) {
+                groups.set(category, { key: category, label: category, items: [] });
+            }
+            groups.get(category).items.push(item);
+        }
+
+        const sorted = Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+        if (uncategorized.length > 0) {
+            sorted.push({ key: '__no_category__', label: 'カテゴリ未設定', items: uncategorized });
+        }
+
+        return sorted;
+    }
+
+    renderGroupedItems(groups, type) {
+        if (!groups || groups.length === 0) {
+            return '';
+        }
+
+        return groups.map(group => {
+            const cards = group.items.map(item => type === 'prompt'
+                ? this.createPromptCard(item)
+                : this.createContextCard(item)).join('');
+            const label = this.escapeHtml(group.label);
+
+            return `
+                <section class="group-section">
+                    <div class="group-header">
+                        <span class="group-title">${label}</span>
+                        <span class="group-count">${group.items.length}</span>
+                    </div>
+                    <div class="group-grid">
+                        ${cards}
+                    </div>
+                </section>
+            `;
+        }).join('');
     }
 
     attachCardEventListeners(type) {
@@ -1324,8 +1694,10 @@ class CognishelfApp {
         if (success) {
             this.showToast('削除しました', 'success');
             if (type === 'prompt') {
+                await this.renderTagFilters('prompt');
                 await this.renderPrompts();
             } else {
+                await this.renderTagFilters('context');
                 await this.renderContexts();
             }
         } else {
@@ -1354,12 +1726,25 @@ class CognishelfApp {
         const metaInfo = [];
         metaInfo.push(`作成日: ${this.formatDate(item.createdAt)}`);
 
-        if (type === 'prompt' && item.tags && item.tags.length > 0) {
-            metaInfo.push(`タグ: ${item.tags.join(', ')}`);
+        if (type === 'prompt') {
+            const promptTags = Array.isArray(item.tags)
+                ? Array.from(new Set(item.tags.map(tag => typeof tag === 'string' ? tag.trim() : '').filter(tag => tag)))
+                : [];
+            if (promptTags.length > 0) {
+                metaInfo.push(`タグ: ${promptTags.join(', ')}`);
+            }
         }
 
-        if (type === 'context' && item.category) {
-            metaInfo.push(`カテゴリ: ${item.category}`);
+        if (type === 'context') {
+            if (item.category) {
+                metaInfo.push(`カテゴリ: ${item.category}`);
+            }
+            const contextTags = Array.isArray(item.tags)
+                ? Array.from(new Set(item.tags.map(tag => typeof tag === 'string' ? tag.trim() : '').filter(tag => tag)))
+                : [];
+            if (contextTags.length > 0) {
+                metaInfo.push(`タグ: ${contextTags.join(', ')}`);
+            }
         }
 
         if (item.folder) {
