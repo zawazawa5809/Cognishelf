@@ -1469,3 +1469,235 @@ body::before {
     white-space: nowrap;
     border-width: 0;
 }
+
+/* ========================================
+   Prompt Mixer Styles
+   ======================================== */
+
+.prompt-mixer-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--primary-200);
+}
+
+.mixer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.mixer-header h3 {
+    font-size: 1.25rem;
+    color: var(--primary-800);
+    font-weight: 600;
+}
+
+.btn-sm {
+    padding: 0.4rem 1rem;
+    font-size: 0.875rem;
+}
+
+.mixer-container {
+    background: var(--primary-50);
+    border: 1px solid var(--primary-200);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+/* ミキサータブ */
+.mixer-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--primary-200);
+    padding-bottom: 0.5rem;
+}
+
+.mixer-tab {
+    background: transparent;
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--primary-600);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.mixer-tab:hover {
+    color: var(--accent-600);
+}
+
+.mixer-tab.active {
+    color: var(--accent-600);
+    border-bottom-color: var(--accent-600);
+}
+
+/* レイヤー一覧 */
+.mixer-layers {
+    background: white;
+    border: 1px solid var(--primary-200);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.mixer-layer {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--primary-100);
+    transition: background 0.2s;
+}
+
+.mixer-layer:last-child {
+    border-bottom: none;
+}
+
+.mixer-layer:hover {
+    background: var(--primary-50);
+}
+
+.mixer-layer-checkbox {
+    margin-top: 0.25rem;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.mixer-layer-info {
+    flex: 1;
+}
+
+.mixer-layer-name {
+    font-weight: 500;
+    color: var(--primary-800);
+    margin-bottom: 0.25rem;
+}
+
+.mixer-layer-prompt {
+    font-size: 0.875rem;
+    color: var(--primary-600);
+    font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.mixer-layer-prompt.positive {
+    color: var(--success-dark);
+}
+
+.mixer-layer-prompt.negative {
+    color: var(--danger-dark);
+}
+
+/* ミキサープレビュー */
+.mixer-preview {
+    background: white;
+    border: 1px solid var(--primary-200);
+    border-radius: 6px;
+    padding: 1.5rem;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.preview-header h4 {
+    font-size: 1rem;
+    color: var(--primary-800);
+    font-weight: 600;
+}
+
+.preview-stats {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.token-badge {
+    background: var(--accent-100);
+    color: var(--accent-700);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.token-badge.warning {
+    background: var(--warning-light);
+    color: var(--warning-dark);
+}
+
+.preview-content {
+    margin-bottom: 1rem;
+}
+
+.preview-section {
+    margin-bottom: 1rem;
+}
+
+.preview-section:last-child {
+    margin-bottom: 0;
+}
+
+.preview-section label {
+    display: block;
+    font-weight: 500;
+    color: var(--primary-700);
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.preview-text {
+    background: var(--primary-50);
+    border: 1px solid var(--primary-200);
+    border-radius: 4px;
+    padding: 0.75rem;
+    font-size: 0.875rem;
+    font-family: 'Monaco', 'Courier New', monospace;
+    color: var(--primary-800);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
+    line-height: 1.6;
+}
+
+.preview-text:empty::before {
+    content: '(なし)';
+    color: var(--primary-400);
+    font-style: italic;
+}
+
+#apply-mixer-btn {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .mixer-tabs {
+        flex-wrap: wrap;
+    }
+
+    .mixer-tab {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.75rem;
+    }
+
+    .mixer-layers {
+        max-height: 200px;
+    }
+
+    .preview-text {
+        font-size: 0.8rem;
+        max-height: 100px;
+    }
+}

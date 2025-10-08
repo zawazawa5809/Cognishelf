@@ -17,8 +17,11 @@ Thumbs.db
 *.swo
 *~
 
-# Node modules (if added in future)
+# Node modules
 node_modules/
+
+# Build output
+dist/
 
 # Log files
 *.log
