@@ -30,9 +30,14 @@ npx http-server -p 8000
 
 ### ファイル構造
 - **[index.html](index.html)**: アプリケーションのメインHTML - モーダルダイアログとタブUIを含む
-  - idbライブラリ(IndexedDBラッパー)を CDN経由で読み込み
+  - `idb` v7 (IndexedDBラッパー) - CDN経由で読み込み
+  - `marked.js` v11 (Markdownパーサー) - CDN経由で読み込み
 - **[app.js](app.js)**: アプリケーションロジック全体 - クラスベース設計
 - **[styles.css](styles.css)**: プロフェッショナルなコーポレート風デザイン
+
+### 外部依存関係
+- **idb** (Google製): Promise/async-awaitベースのIndexedDBラッパー
+- **marked.js**: Markdownレンダリングエンジン(プレビュー機能で使用)
 
 ### データ管理アーキテクチャ
 
@@ -70,14 +75,35 @@ npx http-server -p 8000
 
 **データ構造:**
 ```javascript
+// プロンプト
 {
   id: "1234567890-abc123def",      // 自動生成
   title: "タイトル",
   content: "コンテンツ本文",
-  tags: ["tag1", "tag2"],           // プロンプトのみ
-  category: "カテゴリ",             // コンテキストのみ
+  tags: ["tag1", "tag2"],
+  folder: "フォルダ名",
   createdAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-02T00:00:00.000Z"
+}
+
+// コンテキスト
+{
+  id: "1234567890-abc123def",
+  title: "タイトル",
+  content: "コンテンツ本文",
+  category: "カテゴリ",
+  tags: ["tag1", "tag2"],
+  folder: "フォルダ名",
+  createdAt: "2025-01-01T00:00:00.000Z",
+  updatedAt: "2025-01-02T00:00:00.000Z"
+}
+
+// フォルダ
+{
+  id: "1234567890-abc123def",
+  name: "フォルダ名",
+  type: "prompt" | "context",
+  createdAt: "2025-01-01T00:00:00.000Z"
 }
 ```
 
@@ -115,7 +141,33 @@ npx http-server -p 8000
 - プロンプトと同様の構造で実装
 - カテゴリ機能がタグ機能と異なる点に注意
 
-#### 共通機能 (app.js:394-522)
+#### フォルダ管理
+- `foldersManager`: フォルダ用ストレージマネージャー
+- `renderFolders()`: サイドバーにフォルダツリーを表示
+- `filterByFolder()`: フォルダクリックでアイテムをフィルタリング
+- フォルダはアイテム作成時に自動作成される
+
+#### Markdown対応
+- `marked.js`を使用してMarkdown→HTML変換
+- プレビューモーダルで自動レンダリング
+- カードの説明文も簡易的にMarkdownレンダリング
+
+#### プレビュー機能
+- `openPreviewModal()`: 全画面プレビューモーダル
+- タイトル、メタ情報、Markdownレンダリングされたコンテンツを表示
+- プレビューから直接コピー・編集・削除が可能
+
+#### JSON インポート/エクスポート
+- `exportToJSON()`: 全データをJSON形式でダウンロード
+- `importFromJSON()`: JSONファイルからデータをインポート
+- 既存データとのマージ処理(ID重複チェック)
+
+#### ソート&グループ化
+- ソート: 日付(新/古)、タイトル(A→Z/Z→A)
+- グループ化: フォルダ別、タグ別、カテゴリ別
+- `sortItems()`, `groupItems()` で動的にUI再構築
+
+#### 共通機能
 - `attachCardEventListeners()`: コピー・編集・削除ボタンのイベント設定
 - `copyToClipboard()`: Clipboard API使用
 - `deleteItem()`: 確認ダイアログ付き削除
@@ -196,13 +248,18 @@ npx http-server -p 8000
   - すべてのモダンモバイルブラウザ
 - IndexedDB非対応の場合は自動的にLocalStorageにフォールバック
 
-## 今後の拡張予定 (README参照)
+## 完了済み機能
 
-- ✅ ~~IndexedDB対応~~ (完了)
-- ✅ ~~フォルダ/グループ機能~~ (完了)
-- ✅ ~~Markdown対応~~ (完了)
-- ✅ ~~ソート機能 (日付・タイトル)~~ (完了)
-- データのインポート/エクスポート (JSON)
+- ✅ IndexedDB対応 (LocalStorageからの自動マイグレーション)
+- ✅ フォルダ管理 (サイドバーでのフィルタリング)
+- ✅ Markdown対応 (プレビュー&カード表示)
+- ✅ ソート機能 (日付・タイトル)
+- ✅ グループ化機能 (フォルダ・タグ・カテゴリ別)
+- ✅ JSONインポート/エクスポート
+- ✅ プレビューモーダル
+
+## 今後の拡張予定
+
 - お気に入り機能
 - ダークモードテーマ
 - キーボードショートカット拡張
