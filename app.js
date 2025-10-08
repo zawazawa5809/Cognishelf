@@ -708,6 +708,25 @@ class CognishelfApp {
             this.renderContexts();
         });
 
+        document.querySelectorAll('.json-export-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.exportJson();
+            });
+        });
+
+        const jsonImportInput = document.getElementById('json-import-input');
+        if (jsonImportInput) {
+            jsonImportInput.addEventListener('change', async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) {
+                    return;
+                }
+
+                await this.importJson(file);
+                e.target.value = '';
+            });
+        }
+
         // プレビューモーダルのボタン
         document.getElementById('preview-copy-btn').addEventListener('click', () => {
             if (this.previewItem) {
@@ -757,6 +776,156 @@ class CognishelfApp {
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.toggle('active', section.id === `${tabName}-section`);
         });
+    }
+
+    async exportJson() {
+        try {
+            const [prompts, contexts, folders] = await Promise.all([
+                this.promptsManager.getAll(),
+                this.contextsManager.getAll(),
+                this.foldersManager.getAll()
+            ]);
+
+            const exportPayload = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                prompts,
+                contexts,
+                folders
+            };
+
+            const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            link.href = url;
+            link.download = `cognishelf-backup-${timestamp}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            this.showToast('JSONをエクスポートしました', 'success');
+        } catch (error) {
+            console.error('Failed to export JSON:', error);
+            this.showToast('JSONエクスポートに失敗しました', 'error');
+        }
+    }
+
+    async importJson(file) {
+        if (!file) return;
+
+        try {
+            const fileContent = await file.text();
+            const data = JSON.parse(fileContent);
+
+            if (!data || typeof data !== 'object') {
+                throw new Error('Invalid JSON structure');
+            }
+
+            const prompts = Array.isArray(data.prompts) ? data.prompts : [];
+            const contexts = Array.isArray(data.contexts) ? data.contexts : [];
+            const folders = Array.isArray(data.folders) ? data.folders : [];
+
+            const folderIdMap = {};
+
+            for (const folder of folders) {
+                if (!folder || typeof folder !== 'object') continue;
+
+                const name = typeof folder.name === 'string' ? folder.name.trim() : '';
+                const type = folder.type;
+
+                if (!name || (type !== 'prompt' && type !== 'context')) {
+                    continue;
+                }
+
+                const newFolder = await this.getOrCreateFolder(name, type);
+                if (folder.id) {
+                    folderIdMap[folder.id] = newFolder.id;
+                }
+            }
+
+            let importedPromptCount = 0;
+
+            for (const prompt of prompts) {
+                if (!prompt || typeof prompt !== 'object') continue;
+
+                const title = typeof prompt.title === 'string' ? prompt.title.trim() : '';
+                const content = typeof prompt.content === 'string' ? prompt.content : '';
+
+                if (!title || !content.trim()) {
+                    continue;
+                }
+
+                const promptData = {
+                    title,
+                    content
+                };
+
+                if (Array.isArray(prompt.tags)) {
+                    const tags = prompt.tags
+                        .map(tag => typeof tag === 'string' ? tag.trim() : '')
+                        .filter(tag => tag);
+                    if (tags.length > 0) {
+                        promptData.tags = tags;
+                    }
+                } else if (typeof prompt.tags === 'string' && prompt.tags.trim()) {
+                    const tags = prompt.tags
+                        .split(',')
+                        .map(tag => tag.trim())
+                        .filter(tag => tag);
+                    if (tags.length > 0) {
+                        promptData.tags = tags;
+                    }
+                }
+
+                if (prompt.folder && folderIdMap[prompt.folder]) {
+                    promptData.folder = folderIdMap[prompt.folder];
+                }
+
+                await this.promptsManager.add(promptData);
+                importedPromptCount += 1;
+            }
+
+            let importedContextCount = 0;
+
+            for (const context of contexts) {
+                if (!context || typeof context !== 'object') continue;
+
+                const title = typeof context.title === 'string' ? context.title.trim() : '';
+                const content = typeof context.content === 'string' ? context.content : '';
+
+                if (!title || !content.trim()) {
+                    continue;
+                }
+
+                const contextData = {
+                    title,
+                    content
+                };
+
+                if (context.category && typeof context.category === 'string') {
+                    contextData.category = context.category.trim();
+                }
+
+                if (context.folder && folderIdMap[context.folder]) {
+                    contextData.folder = folderIdMap[context.folder];
+                }
+
+                await this.contextsManager.add(contextData);
+                importedContextCount += 1;
+            }
+
+            await this.renderFolders('prompt');
+            await this.renderFolders('context');
+            await this.renderPrompts();
+            await this.renderContexts();
+
+            this.showToast(`インポートが完了しました (プロンプト${importedPromptCount}件, コンテキスト${importedContextCount}件)`, 'success');
+        } catch (error) {
+            console.error('Failed to import JSON:', error);
+            this.showToast('JSONインポートに失敗しました', 'error');
+        }
     }
 
     // ========================================

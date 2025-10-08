@@ -56,6 +56,10 @@
                                     <option value="title-desc">タイトル (Z→A)</option>
                                 </select>
                             </div>
+                            <div class="toolbar-actions">
+                                <button type="button" class="btn btn-secondary json-export-btn" id="prompt-export-btn">JSONエクスポート</button>
+                                <label for="json-import-input" class="btn btn-secondary json-import-label">JSONインポート</label>
+                            </div>
                         </div>
 
                         <div id="prompts-grid" class="items-grid">
@@ -92,6 +96,10 @@
                                     <option value="title-asc">タイトル (A→Z)</option>
                                     <option value="title-desc">タイトル (Z→A)</option>
                                 </select>
+                            </div>
+                            <div class="toolbar-actions">
+                                <button type="button" class="btn btn-secondary json-export-btn" id="context-export-btn">JSONエクスポート</button>
+                                <label for="json-import-input" class="btn btn-secondary json-import-label">JSONインポート</label>
                             </div>
                         </div>
 
@@ -191,6 +199,8 @@
             </div>
         </div>
     </div>
+
+    <input type="file" id="json-import-input" class="hidden-file-input" accept="application/json">
 
     <script src="app.js"></script>
 </body>
