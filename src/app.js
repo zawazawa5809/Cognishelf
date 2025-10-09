@@ -72,7 +72,7 @@ class StorageManager extends StorageInterface {
 
 // IndexedDB版StorageManager
 class IndexedDBManager extends StorageInterface {
-    constructor(dbName, storeName, version = 2) {
+    constructor(dbName, storeName, version = 3) {
         super();
         this.dbName = dbName;
         this.storeName = storeName;
@@ -116,6 +116,16 @@ class IndexedDBManager extends StorageInterface {
                     projectStore.createIndex('name', 'name', { unique: false });
                     projectStore.createIndex('currentPhase', 'currentPhase', { unique: false });
                     projectStore.createIndex('startDate', 'startDate', { unique: false });
+                }
+
+                // Phase 2: テンプレートライブラリ - templates Object Store
+                if (!db.objectStoreNames.contains('templates')) {
+                    const templateStore = db.createObjectStore('templates', { keyPath: 'id' });
+                    templateStore.createIndex('name', 'name', { unique: false });
+                    templateStore.createIndex('category', 'category', { unique: false });
+                    templateStore.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+                    templateStore.createIndex('usageCount', 'usageCount', { unique: false });
+                    templateStore.createIndex('author', 'author', { unique: false });
                 }
 
                 // Phase 1: マイグレーション - 既存プロンプトにpmConfigフィールド追加
@@ -236,7 +246,7 @@ class StorageAdapter {
         // IndexedDB対応チェック
         if ('indexedDB' in window && typeof idb !== 'undefined') {
             try {
-                const manager = new IndexedDBManager('cognishelf-db', storeName, 1);
+                const manager = new IndexedDBManager('cognishelf-db', storeName, 3);
                 await manager.init();
 
                 // LocalStorageからマイグレーション
@@ -298,6 +308,7 @@ class CognishelfApp {
         this.promptsManager = null;
         this.contextsManager = null;
         this.foldersManager = null;
+        this.templatesManager = null; // Phase 2: テンプレート管理
         this.currentTab = 'prompts';
         this.editingItem = null;
         this.editingType = null;
@@ -321,6 +332,7 @@ class CognishelfApp {
             this.promptsManager = await StorageAdapter.createManager('prompts', 'cognishelf-prompts');
             this.contextsManager = await StorageAdapter.createManager('contexts', 'cognishelf-contexts');
             this.foldersManager = await StorageAdapter.createManager('folders', 'cognishelf-folders');
+            this.templatesManager = await StorageAdapter.createManager('templates', 'cognishelf-templates'); // Phase 2
 
             this.setupEventListeners();
             const promptGroupingSelect = document.getElementById('prompt-grouping');
@@ -534,6 +546,29 @@ class CognishelfApp {
                 this.closeAllModals();
                 this.deleteItem(itemId, itemType);
             }
+        });
+
+        // Phase 2: テンプレート検索
+        const templateSearch = document.getElementById('template-search');
+        if (templateSearch) {
+            templateSearch.addEventListener('input', async (e) => {
+                const query = e.target.value;
+                const templates = await window.templateManager.searchTemplates(query);
+                this.renderTemplatesList(templates);
+            });
+        }
+
+        // Phase 2: テンプレートフィルター
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                // アクティブ状態切り替え
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+
+                const category = e.target.dataset.category;
+                const templates = await window.templateManager.getTemplatesByCategory(category);
+                this.renderTemplatesList(templates);
+            });
         });
 
         // キーボードショートカット
@@ -1689,6 +1724,276 @@ class CognishelfApp {
                 day: 'numeric'
             });
         }
+    }
+
+    // ========================================
+    // Phase 2: テンプレート管理メソッド
+    // ========================================
+
+    async renderTemplates() {
+        const grid = document.getElementById('templates-grid');
+        if (!grid) return;
+
+        try {
+            const templates = await window.templateManager.getAllTemplates();
+            this.renderTemplatesList(templates);
+        } catch (error) {
+            console.error('Failed to render templates:', error);
+            grid.innerHTML = '<p class="no-items">テンプレートの読み込みに失敗しました</p>';
+        }
+    }
+
+    renderTemplatesList(templates) {
+        const grid = document.getElementById('templates-grid');
+        if (!grid) return;
+
+        if (templates.length === 0) {
+            grid.innerHTML = '<p class="no-items">テンプレートがありません</p>';
+            return;
+        }
+
+        grid.innerHTML = templates.map(template => this.createTemplateCard(template)).join('');
+        this.attachTemplateEventListeners();
+    }
+
+    createTemplateCard(template) {
+        const cardClass = template.author === 'system' ? 'template-card system-template' : 'template-card custom-template';
+
+        return `
+            <div class="${cardClass}" data-template-id="${template.id}">
+                <div class="template-card-header">
+                    <span class="template-category">${this.escapeHtml(template.category)}</span>
+                    <h3>${this.escapeHtml(template.name)}</h3>
+                </div>
+                <p class="template-description">${this.escapeHtml(template.description)}</p>
+                ${template.tags && template.tags.length > 0 ? `
+                    <div class="template-tags">
+                        ${template.tags.map(tag => `<span class="template-tag">${this.escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
+                <div class="template-meta">
+                    <div class="template-meta-item">
+                        <span>📊</span>
+                        <span>${template.usageCount || 0}回使用</span>
+                    </div>
+                    ${template.rating > 0 ? `
+                        <div class="template-meta-item">
+                            <span>⭐</span>
+                            <span>${template.rating.toFixed(1)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary apply-template-btn">適用</button>
+                    <button class="btn btn-secondary preview-template-btn">プレビュー</button>
+                    <button class="btn btn-secondary copy-template-btn" title="テンプレートをコピー">📋</button>
+                </div>
+            </div>
+        `;
+    }
+
+    attachTemplateEventListeners() {
+        // 適用ボタン
+        document.querySelectorAll('.apply-template-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const card = e.target.closest('.template-card');
+                const templateId = card.dataset.templateId;
+                this.openTemplateApplyModal(templateId);
+            });
+        });
+
+        // プレビューボタン
+        document.querySelectorAll('.preview-template-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const card = e.target.closest('.template-card');
+                const templateId = card.dataset.templateId;
+                await this.previewTemplate(templateId);
+            });
+        });
+
+        // コピーボタン
+        document.querySelectorAll('.copy-template-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const card = e.target.closest('.template-card');
+                const templateId = card.dataset.templateId;
+                await this.copyTemplateToClipboard(templateId);
+            });
+        });
+    }
+
+    async copyTemplateToClipboard(templateId) {
+        try {
+            const template = await window.templateManager.storage.findById(templateId);
+            if (!template) {
+                this.showToast('テンプレートが見つかりません', 'error');
+                return;
+            }
+
+            // テンプレートの内容をクリップボードにコピー
+            const textToCopy = `${template.name}\n\n${template.promptTemplate}${template.contextTemplate ? `\n\n---\n\n${template.contextTemplate}` : ''}`;
+            await navigator.clipboard.writeText(textToCopy);
+            this.showToast('テンプレートをクリップボードにコピーしました', 'success');
+        } catch (error) {
+            console.error('Failed to copy template:', error);
+            this.showToast('コピーに失敗しました', 'error');
+        }
+    }
+
+    async openTemplateApplyModal(templateId) {
+        const template = await window.templateManager.storage.findById(templateId);
+        if (!template) {
+            this.showToast('テンプレートが見つかりません', 'error');
+            return;
+        }
+
+        const modal = document.getElementById('template-apply-modal');
+        const title = document.getElementById('template-apply-title');
+        const container = document.getElementById('template-variables-container');
+
+        title.textContent = `${template.name} を適用`;
+
+        // 変数入力フォームを生成
+        container.innerHTML = template.variables.map(variable => {
+            const required = variable.required ? '<span class="required">*</span>' : '';
+            const placeholder = variable.placeholder ? `placeholder="${this.escapeHtml(variable.placeholder)}"` : '';
+
+            let inputHtml = '';
+            switch (variable.type) {
+                case 'textarea':
+                    inputHtml = `<textarea name="${variable.name}" ${placeholder}></textarea>`;
+                    break;
+                case 'select':
+                    inputHtml = `
+                        <select name="${variable.name}">
+                            ${variable.options.map(opt => `<option value="${this.escapeHtml(opt)}">${this.escapeHtml(opt)}</option>`).join('')}
+                        </select>
+                    `;
+                    break;
+                case 'date':
+                case 'datetime':
+                    inputHtml = `<input type="${variable.type === 'datetime' ? 'datetime-local' : 'date'}" name="${variable.name}">`;
+                    break;
+                default:
+                    inputHtml = `<input type="text" name="${variable.name}" ${placeholder}>`;
+            }
+
+            return `
+                <div class="variable-input-group">
+                    <label>${this.escapeHtml(variable.label)}${required}</label>
+                    ${inputHtml}
+                    ${variable.placeholder ? `<span class="variable-placeholder">${this.escapeHtml(variable.placeholder)}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+
+        modal.classList.add('active');
+
+        // フォーム送信処理
+        const form = document.getElementById('template-apply-form');
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            await this.applyTemplateToPrompt(templateId, new FormData(form));
+            this.closeAllModals();
+        };
+    }
+
+    async applyTemplateToPrompt(templateId, formData) {
+        try {
+            // FormDataから変数値を取得
+            const variableValues = {};
+            for (const [key, value] of formData.entries()) {
+                variableValues[key] = value;
+            }
+
+            // テンプレートを適用
+            const result = await window.templateManager.applyTemplate(templateId, variableValues);
+
+            // プロンプトモーダルを開いて適用
+            this.openPromptModal();
+
+            // プロンプト内容を設定
+            document.getElementById('prompt-title').value = result.templateName;
+            document.getElementById('prompt-content').value = result.prompt;
+
+            // タグも設定
+            if (result.tags && result.tags.length > 0) {
+                document.getElementById('prompt-tags').value = result.tags.join(', ');
+            }
+
+            this.showToast('テンプレートを適用しました', 'success');
+        } catch (error) {
+            console.error('Failed to apply template:', error);
+            this.showToast('テンプレートの適用に失敗しました', 'error');
+        }
+    }
+
+    async previewTemplate(templateId) {
+        const template = await window.templateManager.storage.findById(templateId);
+        if (!template) return;
+
+        const modal = document.getElementById('preview-modal');
+        const title = document.getElementById('preview-title');
+        const meta = document.getElementById('preview-meta');
+        const content = document.getElementById('preview-content');
+
+        title.textContent = template.name;
+
+        meta.innerHTML = `
+            <div class="meta-item"><strong>カテゴリ:</strong> ${this.escapeHtml(template.category)}</div>
+            <div class="meta-item"><strong>タグ:</strong> ${template.tags ? template.tags.map(t => this.escapeHtml(t)).join(', ') : 'なし'}</div>
+            <div class="meta-item"><strong>使用回数:</strong> ${template.usageCount || 0}回</div>
+            <div class="meta-item"><strong>種別:</strong> ${template.author === 'system' ? '公式テンプレート' : 'カスタムテンプレート'}</div>
+        `;
+
+        // テンプレート本文をプレビュー
+        const previewText = `## プロンプトテンプレート\n\n${template.promptTemplate}\n\n${template.contextTemplate ? `## コンテキストテンプレート\n\n${template.contextTemplate}` : ''}`;
+        content.innerHTML = marked.parse(previewText);
+
+        // モーダルフッターのボタンをテンプレート用に変更
+        const footer = modal.querySelector('.modal-footer');
+        footer.innerHTML = `
+            <button class="btn btn-success" id="preview-apply-template-btn">適用</button>
+            ${template.author === 'custom' ? '<button class="btn btn-danger" id="preview-delete-template-btn">削除</button>' : ''}
+            <button class="btn btn-secondary cancel-btn">閉じる</button>
+        `;
+
+        // 適用ボタンのイベント
+        const applyBtn = document.getElementById('preview-apply-template-btn');
+        if (applyBtn) {
+            applyBtn.onclick = () => {
+                this.closeAllModals();
+                this.openTemplateApplyModal(templateId);
+            };
+        }
+
+        // 削除ボタンのイベント（カスタムテンプレートのみ）
+        const deleteBtn = document.getElementById('preview-delete-template-btn');
+        if (deleteBtn) {
+            deleteBtn.onclick = async () => {
+                if (confirm('このテンプレートを削除してもよろしいですか？')) {
+                    try {
+                        await window.templateManager.deleteTemplate(templateId);
+                        this.closeAllModals();
+                        await this.renderTemplates();
+                        this.showToast('テンプレートを削除しました', 'success');
+                    } catch (error) {
+                        console.error('Failed to delete template:', error);
+                        this.showToast('テンプレートの削除に失敗しました', 'error');
+                    }
+                }
+            };
+        }
+
+        // 閉じるボタンのイベント
+        const cancelBtns = footer.querySelectorAll('.cancel-btn');
+        cancelBtns.forEach(btn => {
+            btn.onclick = () => this.closeAllModals();
+        });
+
+        modal.classList.add('active');
     }
 }
 

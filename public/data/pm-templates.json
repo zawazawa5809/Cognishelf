@@ -1,0 +1,252 @@
+[
+  {
+    "name": "キックオフMTG議事録",
+    "category": "会議・コミュニケーション",
+    "tags": ["会議", "キックオフ", "議事録"],
+    "description": "プロジェクトキックオフミーティングの議事録作成用テンプレート",
+    "promptTemplate": "# {{projectName}} キックオフMTG議事録\n\n## 開催情報\n- 日時: {{meetingDate}}\n- 参加者: {{attendees}}\n- 場所: {{location}}\n\n## アジェンダ\n1. プロジェクト背景・目的\n2. スコープ・成果物\n3. スケジュール・マイルストーン\n4. 体制・役割分担\n5. コミュニケーションルール\n6. Q&A\n\n## 議事内容\n{{content}}\n\n## 決定事項\n- \n\n## Next Action\n- [ ] \n\n## 課題・リスク\n- ",
+    "contextTemplate": "# {{projectName}} プロジェクト背景・目的\n\n## 背景\n{{background}}\n\n## 目的\n{{objective}}\n\n## 成功指標(KPI)\n{{kpi}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "meetingDate", "label": "開催日時", "type": "datetime", "required": true },
+      { "name": "attendees", "label": "参加者", "type": "textarea", "placeholder": "例: 山田太郎(PM), 佐藤花子(PO)", "required": true },
+      { "name": "location", "label": "場所", "type": "text", "defaultValue": "オンライン(Zoom)", "required": false },
+      { "name": "content", "label": "議事内容", "type": "textarea", "required": true }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "週次定例MTG議事録",
+    "category": "会議・コミュニケーション",
+    "tags": ["会議", "定例", "議事録", "進捗"],
+    "description": "週次定例ミーティングの議事録作成用テンプレート",
+    "promptTemplate": "# {{projectName}} 週次定例MTG議事録\n\n**日時:** {{meetingDate}}\n**参加者:** {{attendees}}\n\n## 今週の進捗\n{{progress}}\n\n## 課題・ブロッカー\n{{issues}}\n\n## 次週の予定\n{{nextWeekPlan}}\n\n## 決定事項\n- \n\n## Action Items\n- [ ] ",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "meetingDate", "label": "開催日時", "type": "datetime", "required": true },
+      { "name": "attendees", "label": "参加者", "type": "text", "required": false },
+      { "name": "progress", "label": "今週の進捗", "type": "textarea", "required": true },
+      { "name": "issues", "label": "課題・ブロッカー", "type": "textarea", "required": true },
+      { "name": "nextWeekPlan", "label": "次週の予定", "type": "textarea", "required": true }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "要件定義書レビュー依頼",
+    "category": "ドキュメント作成",
+    "tags": ["要件定義", "レビュー", "ドキュメント"],
+    "description": "要件定義書のレビュー依頼文書作成用テンプレート",
+    "promptTemplate": "# 要件定義書レビュー依頼\n\n## レビュー対象\n**ドキュメント:** {{documentName}}\n**バージョン:** {{version}}\n**対象機能:** {{targetFeatures}}\n\n## レビュー観点\n{{reviewPoints}}\n\n## レビュー期限\n{{deadline}}\n\n## 期待するフィードバック\n- 要件の網羅性\n- 記述の明確性\n- 実現可能性\n- テスト観点での妥当性\n\n## 補足資料\n{{additionalDocs}}",
+    "variables": [
+      { "name": "documentName", "label": "ドキュメント名", "type": "text", "defaultValue": "要件定義書", "required": true },
+      { "name": "version", "label": "バージョン", "type": "text", "defaultValue": "v1.0", "required": true },
+      { "name": "targetFeatures", "label": "対象機能", "type": "textarea", "required": true },
+      { "name": "reviewPoints", "label": "レビュー観点", "type": "textarea", "placeholder": "特に注目してほしいポイントを記載", "required": true },
+      { "name": "deadline", "label": "レビュー期限", "type": "date", "required": true },
+      { "name": "additionalDocs", "label": "補足資料", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "設計書作成ガイド",
+    "category": "ドキュメント作成",
+    "tags": ["設計", "ドキュメント", "ガイド"],
+    "description": "設計書作成時の確認事項・ガイドライン",
+    "promptTemplate": "# {{documentType}}設計書作成ガイド\n\n## 対象システム\n{{systemName}}\n\n## 記載必須事項\n### 1. 概要\n- 目的・背景\n- スコープ\n- 前提条件・制約事項\n\n### 2. アーキテクチャ\n{{architecturePoints}}\n\n### 3. インターフェース定義\n{{interfacePoints}}\n\n### 4. データモデル\n{{dataModelPoints}}\n\n### 5. エラーハンドリング\n{{errorHandlingPoints}}\n\n### 6. セキュリティ考慮事項\n{{securityPoints}}\n\n### 7. パフォーマンス要件\n{{performancePoints}}\n\n## レビュー観点\n- 要件との整合性\n- 実装可能性\n- 保守性・拡張性\n- テスト容易性",
+    "variables": [
+      { "name": "documentType", "label": "設計書種別", "type": "select", "options": ["基本", "詳細", "インターフェース", "データベース"], "required": true },
+      { "name": "systemName", "label": "システム名", "type": "text", "required": true },
+      { "name": "architecturePoints", "label": "アーキテクチャのポイント", "type": "textarea", "required": true },
+      { "name": "interfacePoints", "label": "インターフェースのポイント", "type": "textarea", "required": true },
+      { "name": "dataModelPoints", "label": "データモデルのポイント", "type": "textarea", "required": true },
+      { "name": "errorHandlingPoints", "label": "エラーハンドリングのポイント", "type": "textarea", "required": false },
+      { "name": "securityPoints", "label": "セキュリティ考慮事項", "type": "textarea", "required": false },
+      { "name": "performancePoints", "label": "パフォーマンス要件", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "テスト計画書",
+    "category": "ドキュメント作成",
+    "tags": ["テスト", "品質管理", "計画"],
+    "description": "テスト計画書作成用テンプレート",
+    "promptTemplate": "# {{projectName}} テスト計画書\n\n## テスト対象\n{{testTarget}}\n\n## テスト種別\n{{testTypes}}\n\n## テストスコープ\n### 対象範囲\n{{inScope}}\n\n### 対象外\n{{outOfScope}}\n\n## テスト環境\n{{testEnvironment}}\n\n## スケジュール\n- テスト準備: {{prepStartDate}} - {{prepEndDate}}\n- テスト実施: {{execStartDate}} - {{execEndDate}}\n- 不具合修正: {{fixPeriod}}\n\n## 体制\n{{testTeam}}\n\n## 完了基準\n{{completionCriteria}}\n\n## リスク\n{{risks}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "testTarget", "label": "テスト対象", "type": "textarea", "required": true },
+      { "name": "testTypes", "label": "テスト種別", "type": "textarea", "placeholder": "例: 単体テスト、結合テスト、システムテスト", "required": true },
+      { "name": "inScope", "label": "対象範囲", "type": "textarea", "required": true },
+      { "name": "outOfScope", "label": "対象外", "type": "textarea", "required": false },
+      { "name": "testEnvironment", "label": "テスト環境", "type": "textarea", "required": true },
+      { "name": "prepStartDate", "label": "準備開始日", "type": "date", "required": true },
+      { "name": "prepEndDate", "label": "準備終了日", "type": "date", "required": true },
+      { "name": "execStartDate", "label": "実施開始日", "type": "date", "required": true },
+      { "name": "execEndDate", "label": "実施終了日", "type": "date", "required": true },
+      { "name": "fixPeriod", "label": "修正期間", "type": "text", "required": false },
+      { "name": "testTeam", "label": "テスト体制", "type": "textarea", "required": true },
+      { "name": "completionCriteria", "label": "完了基準", "type": "textarea", "required": true },
+      { "name": "risks", "label": "リスク", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "リスク洗い出しワークショップ",
+    "category": "リスク管理",
+    "tags": ["リスク", "ワークショップ", "洗い出し"],
+    "description": "プロジェクトリスク洗い出しワークショップ用テンプレート",
+    "promptTemplate": "# {{projectName}} リスク洗い出しワークショップ\n\n## 対象フェーズ\n{{phase}}\n\n## リスクカテゴリ\n### 1. スコープリスク\n{{scopeRisks}}\n\n### 2. スケジュールリスク\n{{scheduleRisks}}\n\n### 3. コストリスク\n{{costRisks}}\n\n### 4. 品質リスク\n{{qualityRisks}}\n\n### 5. 技術リスク\n{{techRisks}}\n\n### 6. 組織・リソースリスク\n{{resourceRisks}}\n\n### 7. 外部依存リスク\n{{externalRisks}}\n\n## リスク評価基準\n- **発生確率:** 高/中/低\n- **影響度:** 大/中/小\n- **優先度:** 発生確率 × 影響度\n\n## 次のアクション\n- 高優先度リスクの対応計画策定\n- リスクオーナーのアサイン\n- 定期的なリスクレビュー実施",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "phase", "label": "対象フェーズ", "type": "select", "options": ["企画", "要件定義", "設計", "開発", "テスト", "リリース", "全体"], "required": true },
+      { "name": "scopeRisks", "label": "スコープリスク", "type": "textarea", "placeholder": "例: 要件の曖昧さ、スコープクリープ", "required": false },
+      { "name": "scheduleRisks", "label": "スケジュールリスク", "type": "textarea", "placeholder": "例: 見積もり不正確、依存関係の遅延", "required": false },
+      { "name": "costRisks", "label": "コストリスク", "type": "textarea", "required": false },
+      { "name": "qualityRisks", "label": "品質リスク", "type": "textarea", "required": false },
+      { "name": "techRisks", "label": "技術リスク", "type": "textarea", "placeholder": "例: 新技術の習得、パフォーマンス問題", "required": false },
+      { "name": "resourceRisks", "label": "組織・リソースリスク", "type": "textarea", "placeholder": "例: キーパーソンの離脱、スキル不足", "required": false },
+      { "name": "externalRisks", "label": "外部依存リスク", "type": "textarea", "placeholder": "例: ベンダー遅延、法規制変更", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "WBS作成支援",
+    "category": "プロジェクト管理",
+    "tags": ["WBS", "スケジュール", "計画"],
+    "description": "Work Breakdown Structure作成支援テンプレート",
+    "promptTemplate": "# {{projectName}} WBS作成\n\n## プロジェクト概要\n{{projectOverview}}\n\n## 主要成果物\n{{deliverables}}\n\n## フェーズ分解\n### フェーズ1: {{phase1Name}}\n{{phase1Tasks}}\n\n### フェーズ2: {{phase2Name}}\n{{phase2Tasks}}\n\n### フェーズ3: {{phase3Name}}\n{{phase3Tasks}}\n\n## マイルストーン\n{{milestones}}\n\n## 依存関係\n{{dependencies}}\n\n## リソース配分\n{{resourceAllocation}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "projectOverview", "label": "プロジェクト概要", "type": "textarea", "required": true },
+      { "name": "deliverables", "label": "主要成果物", "type": "textarea", "required": true },
+      { "name": "phase1Name", "label": "フェーズ1名", "type": "text", "defaultValue": "企画・要件定義", "required": true },
+      { "name": "phase1Tasks", "label": "フェーズ1タスク", "type": "textarea", "required": true },
+      { "name": "phase2Name", "label": "フェーズ2名", "type": "text", "defaultValue": "設計・開発", "required": true },
+      { "name": "phase2Tasks", "label": "フェーズ2タスク", "type": "textarea", "required": true },
+      { "name": "phase3Name", "label": "フェーズ3名", "type": "text", "defaultValue": "テスト・リリース", "required": true },
+      { "name": "phase3Tasks", "label": "フェーズ3タスク", "type": "textarea", "required": true },
+      { "name": "milestones", "label": "マイルストーン", "type": "textarea", "required": true },
+      { "name": "dependencies", "label": "依存関係", "type": "textarea", "required": false },
+      { "name": "resourceAllocation", "label": "リソース配分", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "ステークホルダー報告書",
+    "category": "会議・コミュニケーション",
+    "tags": ["報告", "ステークホルダー", "経営層"],
+    "description": "ステークホルダー向け進捗報告書作成テンプレート",
+    "promptTemplate": "# {{projectName}} ステークホルダー報告書\n\n**報告日:** {{reportDate}}\n**報告者:** {{reporter}}\n**宛先:** {{recipients}}\n\n## エグゼクティブサマリー\n{{executiveSummary}}\n\n## プロジェクトステータス\n**全体進捗:** {{overallProgress}}%\n**ステータス:** {{status}}\n\n## 今期のハイライト\n{{highlights}}\n\n## 課題・リスク\n{{issuesAndRisks}}\n\n## 次期の主要活動\n{{upcomingActivities}}\n\n## 意思決定・承認依頼事項\n{{decisions}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "reportDate", "label": "報告日", "type": "date", "required": true },
+      { "name": "reporter", "label": "報告者", "type": "text", "required": true },
+      { "name": "recipients", "label": "宛先", "type": "text", "placeholder": "例: 経営層、PO", "required": true },
+      { "name": "executiveSummary", "label": "エグゼクティブサマリー", "type": "textarea", "placeholder": "1-2段落で全体を要約", "required": true },
+      { "name": "overallProgress", "label": "全体進捗(%)", "type": "text", "required": true },
+      { "name": "status", "label": "ステータス", "type": "select", "options": ["順調", "注意", "警告", "危機"], "required": true },
+      { "name": "highlights", "label": "ハイライト", "type": "textarea", "required": true },
+      { "name": "issuesAndRisks", "label": "課題・リスク", "type": "textarea", "required": true },
+      { "name": "upcomingActivities", "label": "次期の主要活動", "type": "textarea", "required": true },
+      { "name": "decisions", "label": "意思決定・承認依頼事項", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "課題エスカレーション",
+    "category": "プロジェクト管理",
+    "tags": ["課題", "エスカレーション", "意思決定"],
+    "description": "重大課題のエスカレーション文書作成テンプレート",
+    "promptTemplate": "# 課題エスカレーション: {{issueTitle}}\n\n**緊急度:** {{urgency}}\n**影響度:** {{impact}}\n**報告日:** {{reportDate}}\n**報告者:** {{reporter}}\n\n## 課題概要\n{{issueSummary}}\n\n## ビジネスへの影響\n{{businessImpact}}\n\n## 発生経緯\n{{background}}\n\n## これまでの対応\n{{actions}}\n\n## 現在の状況\n{{currentStatus}}\n\n## 必要な意思決定・支援\n{{requiredDecisions}}\n\n## 期限\n{{deadline}}\n\n## 添付資料\n{{attachments}}",
+    "variables": [
+      { "name": "issueTitle", "label": "課題タイトル", "type": "text", "required": true },
+      { "name": "urgency", "label": "緊急度", "type": "select", "options": ["緊急", "高", "中", "低"], "required": true },
+      { "name": "impact", "label": "影響度", "type": "select", "options": ["大", "中", "小"], "required": true },
+      { "name": "reportDate", "label": "報告日", "type": "date", "required": true },
+      { "name": "reporter", "label": "報告者", "type": "text", "required": true },
+      { "name": "issueSummary", "label": "課題概要", "type": "textarea", "required": true },
+      { "name": "businessImpact", "label": "ビジネスへの影響", "type": "textarea", "required": true },
+      { "name": "background", "label": "発生経緯", "type": "textarea", "required": true },
+      { "name": "actions", "label": "これまでの対応", "type": "textarea", "required": true },
+      { "name": "currentStatus", "label": "現在の状況", "type": "textarea", "required": true },
+      { "name": "requiredDecisions", "label": "必要な意思決定・支援", "type": "textarea", "required": true },
+      { "name": "deadline", "label": "期限", "type": "date", "required": true },
+      { "name": "attachments", "label": "添付資料", "type": "textarea", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "振り返り(KPT)",
+    "category": "会議・コミュニケーション",
+    "tags": ["振り返り", "KPT", "改善", "レトロスペクティブ"],
+    "description": "KPT形式の振り返りワークショップ用テンプレート",
+    "promptTemplate": "# {{projectName}} 振り返り(KPT)\n\n**対象期間:** {{period}}\n**実施日:** {{date}}\n**参加者:** {{participants}}\n\n## Keep (継続すること)\n{{keep}}\n\n## Problem (課題・問題)\n{{problem}}\n\n## Try (次に試すこと)\n{{try}}\n\n## Action Items\n{{actionItems}}\n\n## 次回振り返り\n**日時:** {{nextRetrospective}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "period", "label": "対象期間", "type": "text", "placeholder": "例: 2025年1月第1週", "required": true },
+      { "name": "date", "label": "実施日", "type": "date", "required": true },
+      { "name": "participants", "label": "参加者", "type": "textarea", "required": true },
+      { "name": "keep", "label": "Keep (継続すること)", "type": "textarea", "placeholder": "うまくいったこと、継続したいこと", "required": true },
+      { "name": "problem", "label": "Problem (課題・問題)", "type": "textarea", "placeholder": "改善が必要なこと、問題点", "required": true },
+      { "name": "try", "label": "Try (次に試すこと)", "type": "textarea", "placeholder": "新しく挑戦すること、改善アクション", "required": true },
+      { "name": "actionItems", "label": "Action Items", "type": "textarea", "placeholder": "具体的なアクション、担当者、期限", "required": true },
+      { "name": "nextRetrospective", "label": "次回振り返り日時", "type": "datetime", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "リリース計画書",
+    "category": "ドキュメント作成",
+    "tags": ["リリース", "デプロイ", "計画"],
+    "description": "本番リリース計画書作成テンプレート",
+    "promptTemplate": "# {{projectName}} リリース計画書\n\n## リリース概要\n**リリース名:** {{releaseName}}\n**予定日時:** {{releaseDate}}\n**リリース種別:** {{releaseType}}\n\n## リリース対象\n{{releaseScope}}\n\n## リリース手順\n{{releaseProcedure}}\n\n## ロールバック手順\n{{rollbackProcedure}}\n\n## 体制\n{{releaseTeam}}\n\n## スケジュール\n{{schedule}}\n\n## リスクと対策\n{{risks}}\n\n## 成功基準\n{{successCriteria}}\n\n## コミュニケーション計画\n{{communicationPlan}}",
+    "variables": [
+      { "name": "projectName", "label": "プロジェクト名", "type": "text", "required": true },
+      { "name": "releaseName", "label": "リリース名", "type": "text", "placeholder": "例: v1.0.0リリース", "required": true },
+      { "name": "releaseDate", "label": "予定日時", "type": "datetime", "required": true },
+      { "name": "releaseType", "label": "リリース種別", "type": "select", "options": ["メジャーリリース", "マイナーリリース", "パッチリリース", "ホットフィックス"], "required": true },
+      { "name": "releaseScope", "label": "リリース対象", "type": "textarea", "required": true },
+      { "name": "releaseProcedure", "label": "リリース手順", "type": "textarea", "required": true },
+      { "name": "rollbackProcedure", "label": "ロールバック手順", "type": "textarea", "required": true },
+      { "name": "releaseTeam", "label": "リリース体制", "type": "textarea", "required": true },
+      { "name": "schedule", "label": "スケジュール", "type": "textarea", "placeholder": "タイムライン、各工程の時間配分", "required": true },
+      { "name": "risks", "label": "リスクと対策", "type": "textarea", "required": true },
+      { "name": "successCriteria", "label": "成功基準", "type": "textarea", "required": true },
+      { "name": "communicationPlan", "label": "コミュニケーション計画", "type": "textarea", "placeholder": "ユーザー通知、社内通知など", "required": false }
+    ],
+    "author": "system",
+    "isCustom": false
+  },
+  {
+    "name": "変更管理申請書",
+    "category": "プロジェクト管理",
+    "tags": ["変更管理", "変更要求", "CR"],
+    "description": "変更要求(Change Request)申請書作成テンプレート",
+    "promptTemplate": "# 変更管理申請書\n\n**変更ID:** {{changeId}}\n**申請日:** {{requestDate}}\n**申請者:** {{requester}}\n\n## 変更概要\n{{changeSummary}}\n\n## 変更理由\n{{changeReason}}\n\n## 影響分析\n### スコープへの影響\n{{scopeImpact}}\n\n### スケジュールへの影響\n{{scheduleImpact}}\n\n### コストへの影響\n{{costImpact}}\n\n### 品質への影響\n{{qualityImpact}}\n\n### リスクへの影響\n{{riskImpact}}\n\n## 代替案\n{{alternatives}}\n\n## 推奨アクション\n{{recommendation}}\n\n## 承認\n- [ ] PM承認\n- [ ] PO承認\n- [ ] ステークホルダー承認",
+    "variables": [
+      { "name": "changeId", "label": "変更ID", "type": "text", "placeholder": "例: CR-2025-001", "required": true },
+      { "name": "requestDate", "label": "申請日", "type": "date", "required": true },
+      { "name": "requester", "label": "申請者", "type": "text", "required": true },
+      { "name": "changeSummary", "label": "変更概要", "type": "textarea", "required": true },
+      { "name": "changeReason", "label": "変更理由", "type": "textarea", "required": true },
+      { "name": "scopeImpact", "label": "スコープへの影響", "type": "textarea", "required": true },
+      { "name": "scheduleImpact", "label": "スケジュールへの影響", "type": "textarea", "required": true },
+      { "name": "costImpact", "label": "コストへの影響", "type": "textarea", "required": true },
+      { "name": "qualityImpact", "label": "品質への影響", "type": "textarea", "required": false },
+      { "name": "riskImpact", "label": "リスクへの影響", "type": "textarea", "required": false },
+      { "name": "alternatives", "label": "代替案", "type": "textarea", "required": false },
+      { "name": "recommendation", "label": "推奨アクション", "type": "select", "options": ["承認", "条件付き承認", "保留", "却下"], "required": true }
+    ],
+    "author": "system",
+    "isCustom": false
+  }
+]
