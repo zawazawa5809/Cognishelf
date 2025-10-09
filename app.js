@@ -72,7 +72,7 @@ class StorageManager extends StorageInterface {
 
 // IndexedDB版StorageManager
 class IndexedDBManager extends StorageInterface {
-    constructor(dbName, storeName, version = 1) {
+    constructor(dbName, storeName, version = 2) {
         super();
         this.dbName = dbName;
         this.storeName = storeName;
@@ -92,6 +92,7 @@ class IndexedDBManager extends StorageInterface {
                     promptStore.createIndex('createdAt', 'createdAt', { unique: false });
                     promptStore.createIndex('tags', 'tags', { unique: false, multiEntry: true });
                     promptStore.createIndex('folder', 'folder', { unique: false });
+                    promptStore.createIndex('projectId', 'projectId', { unique: false });
                 }
 
                 // contexts Object Store
@@ -101,6 +102,7 @@ class IndexedDBManager extends StorageInterface {
                     contextStore.createIndex('createdAt', 'createdAt', { unique: false });
                     contextStore.createIndex('category', 'category', { unique: false });
                     contextStore.createIndex('folder', 'folder', { unique: false });
+                    contextStore.createIndex('projectId', 'projectId', { unique: false });
                 }
 
                 // folders Object Store
@@ -108,6 +110,44 @@ class IndexedDBManager extends StorageInterface {
                     const folderStore = db.createObjectStore('folders', { keyPath: 'id' });
                     folderStore.createIndex('name', 'name', { unique: false });
                     folderStore.createIndex('type', 'type', { unique: false });
+                    folderStore.createIndex('projectId', 'projectId', { unique: false });
+                }
+
+                // projects Object Store (Phase 3)
+                if (!db.objectStoreNames.contains('projects')) {
+                    const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
+                    projectStore.createIndex('name', 'name', { unique: false });
+                    projectStore.createIndex('status', 'status', { unique: false });
+                    projectStore.createIndex('startDate', 'startDate', { unique: false });
+                    projectStore.createIndex('priority', 'priority', { unique: false });
+                }
+
+                // Version 2へのマイグレーション: 既存データにprojectIdを追加
+                if (oldVersion < 2) {
+                    const stores = ['prompts', 'contexts', 'folders'];
+                    stores.forEach(storeName => {
+                        if (db.objectStoreNames.contains(storeName)) {
+                            const store = transaction.objectStore(storeName);
+
+                            // projectIdインデックスを追加
+                            if (!store.indexNames.contains('projectId')) {
+                                store.createIndex('projectId', 'projectId', { unique: false });
+                            }
+
+                            // 既存データにデフォルトプロジェクトIDを追加
+                            store.openCursor().onsuccess = (event) => {
+                                const cursor = event.target.result;
+                                if (cursor) {
+                                    const item = cursor.value;
+                                    if (!item.projectId) {
+                                        item.projectId = 'default-project';
+                                        cursor.update(item);
+                                    }
+                                    cursor.continue();
+                                }
+                            };
+                        }
+                    });
                 }
             }
         });
@@ -168,6 +208,107 @@ class IndexedDBManager extends StorageInterface {
         const range = IDBKeyRange.bound(startDate, endDate);
         return index.getAll(range);
     }
+
+    // プロジェクトIDで検索
+    async findByProject(projectId) {
+        const db = await this.dbPromise;
+        const index = db.transaction(this.storeName).objectStore(this.storeName).index('projectId');
+        return index.getAll(projectId);
+    }
+}
+
+// ========================================
+// プロジェクト管理専用Manager
+// ========================================
+class ProjectManager extends IndexedDBManager {
+    constructor(dbName = 'cognishelf-db') {
+        super(dbName, 'projects', 2);
+    }
+
+    // アクティブプロジェクトの取得
+    async getActiveProject() {
+        const projectId = localStorage.getItem('cognishelf-active-project');
+        if (!projectId) {
+            // デフォルトプロジェクトを作成または取得
+            return this.getOrCreateDefaultProject();
+        }
+        const project = await this.findById(projectId);
+        return project || this.getOrCreateDefaultProject();
+    }
+
+    // アクティブプロジェクトの設定
+    async setActiveProject(projectId) {
+        const project = await this.findById(projectId);
+        if (!project) {
+            throw new Error('Project not found');
+        }
+        localStorage.setItem('cognishelf-active-project', projectId);
+        return project;
+    }
+
+    // デフォルトプロジェクトの取得または作成
+    async getOrCreateDefaultProject() {
+        const defaultProject = await this.findById('default-project');
+        if (defaultProject) {
+            return defaultProject;
+        }
+
+        // デフォルトプロジェクトを作成
+        const newProject = {
+            id: 'default-project',
+            name: 'デフォルトプロジェクト',
+            description: '初期プロジェクト',
+            status: 'active',
+            startDate: new Date().toISOString().split('T')[0],
+            targetEndDate: null,
+            actualEndDate: null,
+            stakeholders: [],
+            priority: 'medium',
+            metadata: {
+                budget: '',
+                team: [],
+                technologies: []
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        const db = await this.dbPromise;
+        await db.add(this.storeName, newProject);
+        localStorage.setItem('cognishelf-active-project', 'default-project');
+        return newProject;
+    }
+
+    // プロジェクト統計の取得
+    async getProjectStats(projectId) {
+        const db = await this.dbPromise;
+
+        const prompts = await db.getAllFromIndex('prompts', 'projectId', projectId);
+        const contexts = await db.getAllFromIndex('contexts', 'projectId', projectId);
+        const folders = await db.getAllFromIndex('folders', 'projectId', projectId);
+
+        return {
+            promptCount: prompts.length,
+            contextCount: contexts.length,
+            folderCount: folders.length,
+            totalItems: prompts.length + contexts.length
+        };
+    }
+
+    // プロジェクトのアーカイブ
+    async archiveProject(projectId) {
+        if (projectId === 'default-project') {
+            throw new Error('Cannot archive default project');
+        }
+        return this.update(projectId, { status: 'archived' });
+    }
+
+    // ステータス別のプロジェクト取得
+    async findByStatus(status) {
+        const db = await this.dbPromise;
+        const index = db.transaction(this.storeName).objectStore(this.storeName).index('status');
+        return index.getAll(status);
+    }
 }
 
 // ========================================
@@ -179,7 +320,7 @@ class StorageAdapter {
         // IndexedDB対応チェック
         if ('indexedDB' in window && typeof idb !== 'undefined') {
             try {
-                const manager = new IndexedDBManager('cognishelf-db', storeName, 1);
+                const manager = new IndexedDBManager('cognishelf-db', storeName, 2);
                 await manager.init();
 
                 // LocalStorageからマイグレーション
@@ -241,9 +382,12 @@ class CognishelfApp {
         this.promptsManager = null;
         this.contextsManager = null;
         this.foldersManager = null;
+        this.projectsManager = null; // Phase 3
+        this.currentProject = null; // Phase 3
         this.currentTab = 'prompts';
         this.editingItem = null;
         this.editingType = null;
+        this.editingProject = null; // Phase 3
         this.currentPromptSort = 'date-desc';
         this.currentContextSort = 'date-desc';
         this.currentPromptFolder = null; // null = 全表示
@@ -264,6 +408,17 @@ class CognishelfApp {
             this.promptsManager = await StorageAdapter.createManager('prompts', 'cognishelf-prompts');
             this.contextsManager = await StorageAdapter.createManager('contexts', 'cognishelf-contexts');
             this.foldersManager = await StorageAdapter.createManager('folders', 'cognishelf-folders');
+
+            // Phase 3: プロジェクトマネージャーの初期化
+            this.projectsManager = new ProjectManager();
+            await this.projectsManager.init();
+            this.currentProject = await this.projectsManager.getActiveProject();
+
+            // プロジェクトセレクターを更新
+            await this.updateProjectSelector();
+
+            // Phase 3: 既存データのマイグレーション（初回のみ）
+            await this.migrateExistingDataToProject();
 
             this.setupEventListeners();
             const promptGroupingSelect = document.getElementById('prompt-grouping');
@@ -460,6 +615,51 @@ class CognishelfApp {
                 this.closeAllModals();
             }
         });
+
+        // Phase 3: プロジェクト管理イベントリスナー
+        const projectSelect = document.getElementById('active-project-select');
+        if (projectSelect) {
+            projectSelect.addEventListener('change', (e) => {
+                this.switchProject(e.target.value);
+            });
+        }
+
+        const addProjectBtn = document.getElementById('add-project-btn');
+        if (addProjectBtn) {
+            addProjectBtn.addEventListener('click', () => {
+                this.openProjectModal();
+            });
+        }
+
+        const manageProjectsBtn = document.getElementById('manage-projects-btn');
+        if (manageProjectsBtn) {
+            manageProjectsBtn.addEventListener('click', () => {
+                this.openProjectsListModal();
+            });
+        }
+
+        const projectForm = document.getElementById('project-form');
+        if (projectForm) {
+            projectForm.addEventListener('submit', (e) => {
+                this.saveProject(e);
+            });
+        }
+
+        const projectsSearch = document.getElementById('projects-search');
+        if (projectsSearch) {
+            projectsSearch.addEventListener('input', (e) => {
+                const filter = document.getElementById('projects-status-filter').value;
+                this.renderProjectsList(filter, e.target.value);
+            });
+        }
+
+        const projectsFilter = document.getElementById('projects-status-filter');
+        if (projectsFilter) {
+            projectsFilter.addEventListener('change', (e) => {
+                const query = document.getElementById('projects-search').value;
+                this.renderProjectsList(e.target.value, query);
+            });
+        }
     }
 
     switchTab(tabName) {
@@ -474,6 +674,11 @@ class CognishelfApp {
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.toggle('active', section.id === `${tabName}-section`);
         });
+
+        // Phase 3: ダッシュボードタブの場合はレンダリング
+        if (tabName === 'dashboard') {
+            this.renderDashboard();
+        }
     }
 
     async exportJson() {
@@ -676,6 +881,11 @@ class CognishelfApp {
     async renderPrompts() {
         let prompts = await this.promptsManager.getAll();
 
+        // Phase 3: 現在のプロジェクトのアイテムのみ表示
+        if (this.currentProject) {
+            prompts = prompts.filter(p => p.projectId === this.currentProject.id);
+        }
+
         if (this.promptSearchQuery) {
             const query = this.promptSearchQuery.toLowerCase();
             prompts = prompts.filter(prompt => {
@@ -795,7 +1005,12 @@ class CognishelfApp {
             return;
         }
 
-        const promptData = { title, content, tags };
+        const promptData = {
+            title,
+            content,
+            tags,
+            projectId: this.currentProject.id // Phase 3: プロジェクトID追加
+        };
 
         // フォルダ処理
         if (folderName) {
@@ -830,6 +1045,11 @@ class CognishelfApp {
 
     async renderContexts() {
         let contexts = await this.contextsManager.getAll();
+
+        // Phase 3: 現在のプロジェクトのアイテムのみ表示
+        if (this.currentProject) {
+            contexts = contexts.filter(c => c.projectId === this.currentProject.id);
+        }
 
         if (this.contextSearchQuery) {
             const query = this.contextSearchQuery.toLowerCase();
@@ -971,7 +1191,8 @@ class CognishelfApp {
             title,
             content,
             category: category || null,
-            tags
+            tags,
+            projectId: this.currentProject.id // Phase 3: プロジェクトID追加
         };
 
         // フォルダ処理
@@ -1012,10 +1233,14 @@ class CognishelfApp {
 
     async getOrCreateFolder(name, type) {
         const folders = await this.getFolders(type);
-        let folder = folders.find(f => f.name === name);
+        let folder = folders.find(f => f.name === name && f.projectId === this.currentProject.id);
 
         if (!folder) {
-            folder = await this.foldersManager.add({ name, type });
+            folder = await this.foldersManager.add({
+                name,
+                type,
+                projectId: this.currentProject.id // Phase 3: プロジェクトID追加
+            });
         }
 
         return folder;
@@ -1130,7 +1355,13 @@ class CognishelfApp {
     }
 
     async renderFolders(type) {
-        const folders = await this.getFolders(type);
+        let folders = await this.getFolders(type);
+
+        // Phase 3: 現在のプロジェクトのフォルダのみ表示
+        if (this.currentProject) {
+            folders = folders.filter(f => f.projectId === this.currentProject.id);
+        }
+
         const containerId = type === 'prompt' ? 'prompt-folders' : 'context-folders';
         const container = document.getElementById(containerId);
 
@@ -1425,11 +1656,25 @@ class CognishelfApp {
     closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
             modal.classList.remove('active');
+            modal.style.display = 'none'; // Phase 3: display: none も設定
         });
         this.editingItem = null;
         this.editingType = null;
+        this.editingProject = null; // Phase 3
         this.previewItem = null;
         this.previewType = null;
+    }
+
+    // Phase 3: 特定のモーダルを閉じる
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+        if (modalId === 'project-modal') {
+            this.editingProject = null;
+        }
     }
 
     showToast(message, type = 'success') {
@@ -1502,6 +1747,381 @@ class CognishelfApp {
                 day: 'numeric'
             });
         }
+    }
+
+    // ========================================
+    // Phase 3: プロジェクト管理機能
+    // ========================================
+
+    // プロジェクトセレクターの更新
+    async updateProjectSelector() {
+        const allProjects = await this.projectsManager.getAll();
+        const projectSelect = document.getElementById('active-project-select');
+
+        if (!projectSelect) return;
+
+        projectSelect.innerHTML = '';
+        allProjects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            option.selected = project.id === this.currentProject.id;
+            projectSelect.appendChild(option);
+        });
+    }
+
+    // プロジェクト切り替え
+    async switchProject(projectId) {
+        try {
+            this.currentProject = await this.projectsManager.setActiveProject(projectId);
+            await this.updateProjectSelector();
+
+            // 全セクションを再レンダリング
+            await this.renderPrompts();
+            await this.renderContexts();
+            await this.renderFolders('prompt');
+            await this.renderFolders('context');
+
+            // ダッシュボードが表示されている場合は更新
+            if (this.currentTab === 'dashboard') {
+                await this.renderDashboard();
+            }
+
+            this.showToast(`プロジェクト「${this.currentProject.name}」に切り替えました`);
+        } catch (error) {
+            console.error('Failed to switch project:', error);
+            this.showToast('プロジェクトの切り替えに失敗しました', 'error');
+        }
+    }
+
+    // プロジェクトモーダルを開く
+    openProjectModal(projectId = null) {
+        const modal = document.getElementById('project-modal');
+        const modalTitle = document.getElementById('project-modal-title');
+        const form = document.getElementById('project-form');
+
+        if (projectId) {
+            // 編集モード
+            this.editingProject = projectId;
+            modalTitle.textContent = 'プロジェクトを編集';
+            this.loadProjectData(projectId);
+        } else {
+            // 新規作成モード
+            this.editingProject = null;
+            modalTitle.textContent = '新規プロジェクト';
+            form.reset();
+            document.getElementById('project-status').value = 'active';
+            document.getElementById('project-priority').value = 'medium';
+            document.getElementById('project-start-date').value = new Date().toISOString().split('T')[0];
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    // プロジェクトデータをフォームに読み込む
+    async loadProjectData(projectId) {
+        const project = await this.projectsManager.findById(projectId);
+        if (!project) return;
+
+        document.getElementById('project-name').value = project.name;
+        document.getElementById('project-description').value = project.description || '';
+        document.getElementById('project-status').value = project.status;
+        document.getElementById('project-priority').value = project.priority;
+        document.getElementById('project-start-date').value = project.startDate || '';
+        document.getElementById('project-target-end-date').value = project.targetEndDate || '';
+        document.getElementById('project-stakeholders').value = project.stakeholders.join(', ');
+        document.getElementById('project-budget').value = project.metadata.budget || '';
+        document.getElementById('project-team').value = project.metadata.team.join(', ');
+        document.getElementById('project-technologies').value = project.metadata.technologies.join(', ');
+    }
+
+    // プロジェクトを保存
+    async saveProject(e) {
+        e.preventDefault();
+
+        const formData = {
+            name: document.getElementById('project-name').value.trim(),
+            description: document.getElementById('project-description').value.trim(),
+            status: document.getElementById('project-status').value,
+            priority: document.getElementById('project-priority').value,
+            startDate: document.getElementById('project-start-date').value || null,
+            targetEndDate: document.getElementById('project-target-end-date').value || null,
+            actualEndDate: null,
+            stakeholders: document.getElementById('project-stakeholders').value.split(',').map(s => s.trim()).filter(s => s),
+            metadata: {
+                budget: document.getElementById('project-budget').value.trim(),
+                team: document.getElementById('project-team').value.split(',').map(s => s.trim()).filter(s => s),
+                technologies: document.getElementById('project-technologies').value.split(',').map(s => s.trim()).filter(s => s)
+            }
+        };
+
+        try {
+            if (this.editingProject) {
+                // 更新
+                await this.projectsManager.update(this.editingProject, formData);
+                this.showToast('プロジェクトを更新しました');
+
+                // 編集中のプロジェクトがアクティブプロジェクトの場合は再読み込み
+                if (this.editingProject === this.currentProject.id) {
+                    this.currentProject = await this.projectsManager.findById(this.editingProject);
+                }
+            } else {
+                // 新規作成
+                await this.projectsManager.add(formData);
+                this.showToast('プロジェクトを作成しました');
+            }
+
+            await this.updateProjectSelector();
+            this.closeModal('project-modal');
+        } catch (error) {
+            console.error('Failed to save project:', error);
+            this.showToast('プロジェクトの保存に失敗しました', 'error');
+        }
+    }
+
+    // プロジェクト一覧モーダルを開く
+    async openProjectsListModal() {
+        const modal = document.getElementById('projects-list-modal');
+        modal.style.display = 'flex';
+        await this.renderProjectsList();
+    }
+
+    // プロジェクト一覧をレンダリング
+    async renderProjectsList(filterStatus = 'all', searchQuery = '') {
+        const projectsList = document.getElementById('projects-list');
+        let projects = await this.projectsManager.getAll();
+
+        // ステータスフィルタ
+        if (filterStatus !== 'all') {
+            projects = projects.filter(p => p.status === filterStatus);
+        }
+
+        // 検索フィルタ
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            projects = projects.filter(p =>
+                p.name.toLowerCase().includes(query) ||
+                (p.description && p.description.toLowerCase().includes(query))
+            );
+        }
+
+        if (projects.length === 0) {
+            projectsList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">プロジェクトがありません</div>';
+            return;
+        }
+
+        projectsList.innerHTML = projects.map(project => `
+            <div class="project-item" data-project-id="${project.id}">
+                <div class="project-item-main">
+                    <div class="project-item-header">
+                        <h3 class="project-item-title">${this.escapeHtml(project.name)}</h3>
+                        <span class="status-badge status-${project.status}">${this.getStatusLabel(project.status)}</span>
+                        <span class="priority-badge priority-${project.priority}">${this.getPriorityLabel(project.priority)}</span>
+                    </div>
+                    <p class="project-item-description">${this.escapeHtml(project.description || '')}</p>
+                    <div class="project-item-meta">
+                        <span>開始: ${project.startDate || '未設定'}</span>
+                        ${project.targetEndDate ? `<span>目標: ${project.targetEndDate}</span>` : ''}
+                        ${project.stakeholders.length > 0 ? `<span>関係者: ${project.stakeholders.length}名</span>` : ''}
+                    </div>
+                </div>
+                <div class="project-item-actions">
+                    <button class="btn btn-small" onclick="app.switchProject('${project.id}'); app.closeModal('projects-list-modal');">選択</button>
+                    <button class="btn btn-small btn-secondary" onclick="app.openProjectModal('${project.id}');">編集</button>
+                    ${project.id !== 'default-project' ? `<button class="btn btn-small btn-danger" onclick="app.deleteProject('${project.id}');">削除</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // プロジェクトを削除
+    async deleteProject(projectId) {
+        if (projectId === 'default-project') {
+            this.showToast('デフォルトプロジェクトは削除できません', 'error');
+            return;
+        }
+
+        if (projectId === this.currentProject.id) {
+            this.showToast('現在アクティブなプロジェクトは削除できません', 'error');
+            return;
+        }
+
+        if (!confirm('このプロジェクトを削除してもよろしいですか?')) return;
+
+        try {
+            await this.projectsManager.delete(projectId);
+            await this.renderProjectsList();
+            this.showToast('プロジェクトを削除しました');
+        } catch (error) {
+            console.error('Failed to delete project:', error);
+            this.showToast('プロジェクトの削除に失敗しました', 'error');
+        }
+    }
+
+    // ダッシュボードをレンダリング
+    async renderDashboard() {
+        if (!this.currentProject) return;
+
+        // デバッグ: 既存データのマイグレーション確認
+        await this.migrateExistingDataToProject();
+
+        // 統計情報を取得
+        const stats = await this.projectsManager.getProjectStats(this.currentProject.id);
+        console.log('Dashboard stats:', stats, 'Project:', this.currentProject.id);
+
+        // 統計カードを更新
+        document.getElementById('stat-prompts').textContent = stats.promptCount;
+        document.getElementById('stat-contexts').textContent = stats.contextCount;
+        document.getElementById('stat-folders').textContent = stats.folderCount;
+        document.getElementById('stat-total').textContent = stats.totalItems;
+
+        // プロジェクト情報を表示
+        const projectInfo = document.getElementById('dashboard-project-info');
+        projectInfo.innerHTML = `
+            <h2>${this.escapeHtml(this.currentProject.name)}</h2>
+            <p>${this.escapeHtml(this.currentProject.description || '')}</p>
+            <div class="project-meta">
+                <div class="meta-item">
+                    <div class="meta-label">ステータス</div>
+                    <div class="meta-value">
+                        <span class="status-badge status-${this.currentProject.status}">${this.getStatusLabel(this.currentProject.status)}</span>
+                    </div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">優先度</div>
+                    <div class="meta-value">
+                        <span class="priority-badge priority-${this.currentProject.priority}">${this.getPriorityLabel(this.currentProject.priority)}</span>
+                    </div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">開始日</div>
+                    <div class="meta-value">${this.currentProject.startDate || '未設定'}</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">目標終了日</div>
+                    <div class="meta-value">${this.currentProject.targetEndDate || '未設定'}</div>
+                </div>
+            </div>
+        `;
+
+        // 最近の更新を表示
+        await this.renderRecentActivity();
+    }
+
+    // 最近の更新をレンダリング
+    async renderRecentActivity() {
+        const recentList = document.getElementById('recent-items-list');
+        const prompts = await this.promptsManager.findByProject(this.currentProject.id);
+        const contexts = await this.contextsManager.findByProject(this.currentProject.id);
+
+        const allItems = [
+            ...prompts.map(p => ({ ...p, type: 'prompt' })),
+            ...contexts.map(c => ({ ...c, type: 'context' }))
+        ];
+
+        // 更新日時でソート
+        allItems.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+        // 最新10件
+        const recent = allItems.slice(0, 10);
+
+        if (recent.length === 0) {
+            recentList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">まだアイテムがありません</div>';
+            return;
+        }
+
+        recentList.innerHTML = recent.map(item => `
+            <div class="recent-item">
+                <div class="recent-item-info">
+                    <h4>${this.escapeHtml(item.title)}</h4>
+                    <div class="recent-item-meta">
+                        ${item.type === 'prompt' ? 'プロンプト' : 'コンテキスト'} • ${this.formatDate(item.updatedAt)}
+                    </div>
+                </div>
+                <button class="btn btn-small" onclick="app.openPreviewModal('${item.id}', '${item.type}');">表示</button>
+            </div>
+        `).join('');
+    }
+
+    // ステータスラベル
+    getStatusLabel(status) {
+        const labels = {
+            'planning': '計画中',
+            'active': '進行中',
+            'on-hold': '保留',
+            'completed': '完了',
+            'archived': 'アーカイブ'
+        };
+        return labels[status] || status;
+    }
+
+    // 優先度ラベル
+    getPriorityLabel(priority) {
+        const labels = {
+            'high': '高',
+            'medium': '中',
+            'low': '低'
+        };
+        return labels[priority] || priority;
+    }
+
+    // Phase 3: 既存データを現在のプロジェクトに移行
+    async migrateExistingDataToProject() {
+        if (!this.currentProject) {
+            console.warn('No current project for migration');
+            return;
+        }
+
+        console.log('🔄 Starting migration to project:', this.currentProject.id);
+
+        // プロンプトのマイグレーション
+        const prompts = await this.promptsManager.getAll();
+        console.log('📊 Total prompts in DB:', prompts.length);
+        let migratedCount = 0;
+
+        for (const prompt of prompts) {
+            if (!prompt.projectId) {
+                console.log('  ➡️ Migrating prompt:', prompt.id, prompt.title);
+                await this.promptsManager.update(prompt.id, {
+                    projectId: this.currentProject.id
+                });
+                migratedCount++;
+            } else {
+                console.log('  ✅ Prompt already has projectId:', prompt.id, prompt.projectId);
+            }
+        }
+
+        // コンテキストのマイグレーション
+        const contexts = await this.contextsManager.getAll();
+        console.log('📊 Total contexts in DB:', contexts.length);
+        for (const context of contexts) {
+            if (!context.projectId) {
+                console.log('  ➡️ Migrating context:', context.id, context.title);
+                await this.contextsManager.update(context.id, {
+                    projectId: this.currentProject.id
+                });
+                migratedCount++;
+            } else {
+                console.log('  ✅ Context already has projectId:', context.id, context.projectId);
+            }
+        }
+
+        // フォルダのマイグレーション
+        const folders = await this.foldersManager.getAll();
+        console.log('📊 Total folders in DB:', folders.length);
+        for (const folder of folders) {
+            if (!folder.projectId) {
+                console.log('  ➡️ Migrating folder:', folder.id, folder.name);
+                await this.foldersManager.update(folder.id, {
+                    projectId: this.currentProject.id
+                });
+                migratedCount++;
+            } else {
+                console.log('  ✅ Folder already has projectId:', folder.id, folder.projectId);
+            }
+        }
+
+        console.log(`✅ Migration complete. Migrated ${migratedCount} items to project ${this.currentProject.id}`);
     }
 }
 

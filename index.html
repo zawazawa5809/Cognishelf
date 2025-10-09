@@ -9,8 +9,18 @@
 <body>
     <div id="app">
         <header class="header">
-            <h1>Cognishelf</h1>
-            <p class="subtitle">プロンプト&コンテキストギャラリー</p>
+            <div class="header-main">
+                <h1>Cognishelf</h1>
+                <p class="subtitle">プロンプト&コンテキストギャラリー</p>
+            </div>
+            <div class="project-selector">
+                <label for="active-project-select">プロジェクト:</label>
+                <select id="active-project-select" class="project-select">
+                    <option value="default-project">デフォルトプロジェクト</option>
+                </select>
+                <button id="add-project-btn" class="btn btn-small">+ 新規</button>
+                <button id="manage-projects-btn" class="btn btn-small btn-secondary">管理</button>
+            </div>
         </header>
 
         <main class="main-container">
@@ -21,6 +31,9 @@
                 </button>
                 <button class="tab-button" data-tab="contexts">
                     コンテキスト
+                </button>
+                <button class="tab-button" data-tab="dashboard">
+                    ダッシュボード
                 </button>
                 <button class="tab-button" data-tab="templates">
                     テンプレート
@@ -135,6 +148,45 @@
 
                         <div id="contexts-grid" class="items-grid">
                             <!-- コンテキストカードがここに動的に追加されます -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ダッシュボード (Phase 3) -->
+            <section id="dashboard-section" class="content-section">
+                <div class="section-header">
+                    <h2>プロジェクトダッシュボード</h2>
+                </div>
+
+                <div class="dashboard-container">
+                    <div class="dashboard-stats">
+                        <div class="stat-card">
+                            <h3>プロンプト</h3>
+                            <div class="stat-value" id="stat-prompts">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>コンテキスト</h3>
+                            <div class="stat-value" id="stat-contexts">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>フォルダ</h3>
+                            <div class="stat-value" id="stat-folders">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <h3>合計アイテム</h3>
+                            <div class="stat-value" id="stat-total">0</div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-project-info" id="dashboard-project-info">
+                        <!-- プロジェクト情報がここに動的に追加されます -->
+                    </div>
+
+                    <div class="dashboard-recent-activity">
+                        <h3>最近の更新</h3>
+                        <div id="recent-items-list" class="recent-items">
+                            <!-- 最近更新されたアイテムがここに表示されます -->
                         </div>
                     </div>
                 </div>
@@ -382,6 +434,118 @@
                         <button type="submit" class="btn btn-primary">テンプレート適用</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: プロジェクト管理 (Phase 3) -->
+    <div id="project-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="project-modal-title">新規プロジェクト</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="project-form">
+                    <div class="form-group">
+                        <label for="project-name">プロジェクト名 *</label>
+                        <input type="text" id="project-name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-description">プロジェクト説明</label>
+                        <textarea id="project-description" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="project-status">ステータス *</label>
+                            <select id="project-status" required>
+                                <option value="planning">計画中</option>
+                                <option value="active" selected>進行中</option>
+                                <option value="on-hold">保留</option>
+                                <option value="completed">完了</option>
+                                <option value="archived">アーカイブ</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="project-priority">優先度</label>
+                            <select id="project-priority">
+                                <option value="low">低</option>
+                                <option value="medium" selected>中</option>
+                                <option value="high">高</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="project-start-date">開始日</label>
+                            <input type="date" id="project-start-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="project-target-end-date">目標終了日</label>
+                            <input type="date" id="project-target-end-date">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-stakeholders">ステークホルダー (カンマ区切り)</label>
+                        <input type="text" id="project-stakeholders" placeholder="例: 田中部長, 山田課長, 佐藤リーダー">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-budget">予算</label>
+                        <input type="text" id="project-budget" placeholder="例: 5,000万円">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-team">チームメンバー (カンマ区切り)</label>
+                        <input type="text" id="project-team" placeholder="例: 鈴木, 高橋, 伊藤">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="project-technologies">技術スタック (カンマ区切り)</label>
+                        <input type="text" id="project-technologies" placeholder="例: React, Node.js, PostgreSQL">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary cancel-btn">キャンセル</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル: プロジェクト一覧管理 (Phase 3) -->
+    <div id="projects-list-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>プロジェクト管理</h2>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="projects-list-container">
+                    <div class="toolbar">
+                        <div class="search-box">
+                            <input type="text" id="projects-search" placeholder="プロジェクトを検索...">
+                        </div>
+                        <div class="filter-box">
+                            <select id="projects-status-filter">
+                                <option value="all">すべてのステータス</option>
+                                <option value="planning">計画中</option>
+                                <option value="active">進行中</option>
+                                <option value="on-hold">保留</option>
+                                <option value="completed">完了</option>
+                                <option value="archived">アーカイブ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="projects-list" class="projects-list">
+                        <!-- プロジェクト一覧がここに表示されます -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>

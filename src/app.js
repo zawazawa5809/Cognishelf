@@ -591,6 +591,11 @@ class CognishelfApp {
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.toggle('active', section.id === `${tabName}-section`);
         });
+
+        // Phase 3: ダッシュボードタブの場合はレンダリング
+        if (tabName === 'dashboard') {
+            this.renderDashboard();
+        }
     }
 
     async exportJson() {
@@ -1994,6 +1999,84 @@ class CognishelfApp {
         });
 
         modal.classList.add('active');
+    }
+
+    // ========================================
+    // Phase 3: ダッシュボード機能
+    // ========================================
+
+    async renderDashboard() {
+        console.log('📊 Rendering dashboard...');
+
+        // 統計情報を取得
+        const prompts = await this.promptsManager.getAll();
+        const contexts = await this.contextsManager.getAll();
+        const folders = await this.foldersManager.getAll();
+
+        console.log('Dashboard data:', {
+            prompts: prompts.length,
+            contexts: contexts.length,
+            folders: folders.length
+        });
+
+        // 統計カードを更新
+        const promptsStat = document.getElementById('stat-prompts');
+        const contextsStat = document.getElementById('stat-contexts');
+        const foldersStat = document.getElementById('stat-folders');
+        const totalStat = document.getElementById('stat-total');
+
+        if (promptsStat) promptsStat.textContent = prompts.length;
+        if (contextsStat) contextsStat.textContent = contexts.length;
+        if (foldersStat) foldersStat.textContent = folders.length;
+        if (totalStat) totalStat.textContent = prompts.length + contexts.length;
+
+        // プロジェクト情報を表示（簡易版）
+        const projectInfo = document.getElementById('dashboard-project-info');
+        if (projectInfo) {
+            projectInfo.innerHTML = `
+                <h2>Cognishelf ダッシュボード</h2>
+                <p>プロンプトとコンテキストの統計情報</p>
+            `;
+        }
+
+        // 最近の更新を表示
+        await this.renderRecentActivity();
+    }
+
+    async renderRecentActivity() {
+        const recentList = document.getElementById('recent-items-list');
+        if (!recentList) return;
+
+        const prompts = await this.promptsManager.getAll();
+        const contexts = await this.contextsManager.getAll();
+
+        const allItems = [
+            ...prompts.map(p => ({ ...p, type: 'prompt' })),
+            ...contexts.map(c => ({ ...c, type: 'context' }))
+        ];
+
+        // 更新日時でソート
+        allItems.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+
+        // 最新10件
+        const recent = allItems.slice(0, 10);
+
+        if (recent.length === 0) {
+            recentList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">まだアイテムがありません</div>';
+            return;
+        }
+
+        recentList.innerHTML = recent.map(item => `
+            <div class="recent-item">
+                <div class="recent-item-info">
+                    <h4>${this.escapeHtml(item.title)}</h4>
+                    <div class="recent-item-meta">
+                        ${item.type === 'prompt' ? 'プロンプト' : 'コンテキスト'} • ${this.formatDate(item.updatedAt || item.createdAt)}
+                    </div>
+                </div>
+                <button class="btn btn-small" onclick="app.openPreviewModal('${item.id}', '${item.type}');">表示</button>
+            </div>
+        `).join('');
     }
 }
 
