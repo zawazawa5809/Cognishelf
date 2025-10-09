@@ -11,6 +11,8 @@ import {
   validateTemplate,
   templateFromJSON
 } from '../models/Template.js';
+import { formatDate, formatTime, formatDateTime } from '../utils/dateUtils.js';
+import { InvertedIndex } from '../utils/InvertedIndex.js';
 
 /**
  * テンプレート管理クラス
@@ -19,6 +21,10 @@ export class TemplateManager {
   constructor(storageManager) {
     this.storage = storageManager;
     this.isInitialized = false;
+
+    // Full-Text Search用転置インデックス
+    this.searchIndex = new InvertedIndex();
+    this.indexReady = false;
   }
 
   /**
@@ -37,6 +43,9 @@ export class TemplateManager {
         await this.loadDefaultTemplates();
       }
 
+      // Full-Text Search インデックス構築
+      await this.buildSearchIndex();
+
       this.isInitialized = true;
     } catch (error) {
       console.error('TemplateManager initialization failed:', error);
@@ -45,26 +54,113 @@ export class TemplateManager {
   }
 
   /**
+   * Full-Text Search インデックスを構築
+   */
+  async buildSearchIndex() {
+    try {
+      const templates = await this.storage.getAll();
+
+      console.log(`Building search index for ${templates.length} templates...`);
+      const startTime = performance.now();
+
+      this.searchIndex.clear();
+      this.searchIndex.bulkAdd(templates, [
+        'name',
+        'description',
+        'category',
+        'tags',
+        'promptTemplate',
+        'contextTemplate'
+      ]);
+
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+
+      this.indexReady = true;
+
+      const stats = this.searchIndex.getStats();
+      console.log(`✅ Search index built in ${duration.toFixed(2)}ms`);
+      console.log(`   - Documents: ${stats.totalDocuments}`);
+      console.log(`   - Tokens: ${stats.totalTokens}`);
+      console.log(`   - Avg tokens/doc: ${stats.averageTokensPerDocument.toFixed(1)}`);
+      console.log(`   - Index size: ${(stats.indexSizeBytes / 1024).toFixed(2)} KB`);
+
+    } catch (error) {
+      console.error('Failed to build search index:', error);
+      this.indexReady = false;
+      // インデックス構築失敗は致命的ではない (フォールバック検索を使用)
+    }
+  }
+
+  /**
+   * インデックスを再構築
+   */
+  async rebuildSearchIndex() {
+    await this.buildSearchIndex();
+  }
+
+  /**
    * デフォルトテンプレートをJSONファイルから読み込み
+   * @throws {Error} ネットワークエラーまたはJSON解析エラー時
    */
   async loadDefaultTemplates() {
     try {
       const response = await fetch('/data/pm-templates.json');
       if (!response.ok) {
-        throw new Error(`Failed to load templates: ${response.statusText}`);
+        const errorMsg = `テンプレート読み込み失敗: ${response.status} ${response.statusText}`;
+        console.error(errorMsg);
+        this.showUserNotification('warning', 'デフォルトテンプレートの読み込みに失敗しました。手動でインポートしてください。');
+        throw new Error(errorMsg);
       }
 
       const templatesData = await response.json();
 
-      for (const templateData of templatesData) {
-        const template = createTemplate(templateData);
-        await this.storage.add(template);
+      if (!Array.isArray(templatesData) || templatesData.length === 0) {
+        console.warn('Template data is empty or invalid');
+        this.showUserNotification('info', 'テンプレートデータが空です。');
+        return;
       }
 
-      console.log(`Loaded ${templatesData.length} default templates`);
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const templateData of templatesData) {
+        try {
+          const template = createTemplate(templateData);
+          await this.storage.add(template);
+          successCount++;
+        } catch (addError) {
+          console.error(`Failed to add template: ${templateData.name}`, addError);
+          failureCount++;
+        }
+      }
+
+      console.log(`Loaded ${successCount}/${templatesData.length} default templates`);
+
+      if (successCount > 0) {
+        this.showUserNotification('success', `${successCount}件のテンプレートを読み込みました。`);
+      }
+
+      if (failureCount > 0) {
+        this.showUserNotification('warning', `${failureCount}件のテンプレート読み込みに失敗しました。`);
+      }
     } catch (error) {
       console.error('Failed to load default templates:', error);
       // デフォルトテンプレート読み込み失敗は致命的ではないので続行
+      // ただしユーザーには通知済み
+    }
+  }
+
+  /**
+   * ユーザー通知を表示 (グローバルapp経由)
+   * @param {string} type - 通知タイプ ('success' | 'error' | 'warning' | 'info')
+   * @param {string} message - 通知メッセージ
+   */
+  showUserNotification(type, message) {
+    if (typeof window !== 'undefined' && window.app && typeof window.app.showToast === 'function') {
+      window.app.showToast(message);
+    } else {
+      console.log(`[${type.toUpperCase()}] ${message}`);
     }
   }
 
@@ -77,22 +173,41 @@ export class TemplateManager {
   }
 
   /**
-   * カテゴリでフィルタリング
+   * カテゴリでフィルタリング (インデックス最適化版)
    * @param {string} category - カテゴリ名
    * @returns {Promise<Array>} フィルタリングされたテンプレート配列
    */
   async getTemplatesByCategory(category) {
+    if (!category || category === 'all') {
+      return await this.storage.getAll();
+    }
+
+    // IndexedDBManagerの最適化メソッドを使用
+    if (typeof this.storage.findByCategory === 'function') {
+      return await this.storage.findByCategory(category);
+    }
+
+    // フォールバック: 従来のフィルタリング
     const templates = await this.storage.getAll();
-    if (!category || category === 'all') return templates;
     return templates.filter(t => t.category === category);
   }
 
   /**
-   * タグで検索
+   * タグで検索 (インデックス最適化版)
    * @param {string} tag - タグ名
    * @returns {Promise<Array>} タグを含むテンプレート配列
    */
   async getTemplatesByTag(tag) {
+    if (!tag) {
+      return await this.storage.getAll();
+    }
+
+    // IndexedDBManagerの最適化メソッドを使用
+    if (typeof this.storage.findByTag === 'function') {
+      return await this.storage.findByTag(tag);
+    }
+
+    // フォールバック: 従来のフィルタリング
     const templates = await this.storage.getAll();
     return templates.filter(t => t.tags && t.tags.includes(tag));
   }
@@ -164,9 +279,9 @@ export class TemplateManager {
     return {
       ...values,
       // 自動変数: 日付・時刻
-      date: values.date || this.formatDate(now),
-      time: values.time || this.formatTime(now),
-      datetime: values.datetime || this.formatDateTime(now),
+      date: values.date || formatDate(now),
+      time: values.time || formatTime(now),
+      datetime: values.datetime || formatDateTime(now),
       // 自動変数: 年月日
       year: values.year || now.getFullYear().toString(),
       month: values.month || (now.getMonth() + 1).toString().padStart(2, '0'),
@@ -174,37 +289,6 @@ export class TemplateManager {
     };
   }
 
-  /**
-   * 日付フォーマット
-   * @param {Date} date - 日付オブジェクト
-   * @returns {string} フォーマット済み日付 (YYYY-MM-DD)
-   */
-  formatDate(date) {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  /**
-   * 時刻フォーマット
-   * @param {Date} date - 日付オブジェクト
-   * @returns {string} フォーマット済み時刻 (HH:MM)
-   */
-  formatTime(date) {
-    const hour = date.getHours().toString().padStart(2, '0');
-    const minute = date.getMinutes().toString().padStart(2, '0');
-    return `${hour}:${minute}`;
-  }
-
-  /**
-   * 日時フォーマット
-   * @param {Date} date - 日付オブジェクト
-   * @returns {string} フォーマット済み日時 (YYYY-MM-DD HH:MM)
-   */
-  formatDateTime(date) {
-    return `${this.formatDate(date)} ${this.formatTime(date)}`;
-  }
 
   /**
    * カスタムテンプレートを作成
@@ -224,7 +308,17 @@ export class TemplateManager {
       throw new Error(`Template validation failed: ${validation.errors.join(', ')}`);
     }
 
-    return await this.storage.add(template);
+    const result = await this.storage.add(template);
+
+    // Full-Text Search インデックスに追加
+    if (this.indexReady) {
+      this.searchIndex.addDocument(result.id, result, [
+        'name', 'description', 'category', 'tags',
+        'promptTemplate', 'contextTemplate'
+      ]);
+    }
+
+    return result;
   }
 
   /**
@@ -256,7 +350,17 @@ export class TemplateManager {
       throw new Error(`Template validation failed: ${validation.errors.join(', ')}`);
     }
 
-    return await this.storage.update(templateId, updatedTemplate);
+    const result = await this.storage.update(templateId, updatedTemplate);
+
+    // Full-Text Search インデックスを更新
+    if (this.indexReady) {
+      this.searchIndex.updateDocument(templateId, result, [
+        'name', 'description', 'category', 'tags',
+        'promptTemplate', 'contextTemplate'
+      ]);
+    }
+
+    return result;
   }
 
   /**
@@ -275,7 +379,14 @@ export class TemplateManager {
       throw new Error('System templates cannot be deleted');
     }
 
-    return await this.storage.delete(templateId);
+    const result = await this.storage.delete(templateId);
+
+    // Full-Text Search インデックスから削除
+    if (this.indexReady) {
+      this.searchIndex.removeDocument(templateId);
+    }
+
+    return result;
   }
 
   /**
@@ -295,11 +406,17 @@ export class TemplateManager {
   }
 
   /**
-   * 人気テンプレートを取得
+   * 人気テンプレートを取得 (インデックス最適化版)
    * @param {number} limit - 取得数
    * @returns {Promise<Array>} 人気テンプレート配列
    */
   async getPopularTemplates(limit = 5) {
+    // IndexedDBManagerの最適化メソッドを使用
+    if (typeof this.storage.findByUsageCount === 'function') {
+      return await this.storage.findByUsageCount(limit, 'desc');
+    }
+
+    // フォールバック: 従来のソート
     const templates = await this.storage.getAll();
     return templates
       .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
@@ -320,15 +437,54 @@ export class TemplateManager {
   }
 
   /**
-   * テンプレートを検索
+   * テンプレートを検索 (Full-Text Search対応)
    * @param {string} query - 検索クエリ
+   * @param {Object} options - 検索オプション
    * @returns {Promise<Array>} マッチしたテンプレート配列
    */
-  async searchTemplates(query) {
+  async searchTemplates(query, options = {}) {
+    const {
+      mode = 'auto', // 'auto' | 'fulltext' | 'simple'
+      limit = 100,
+      minScore = 0.1,
+      includeScore = false
+    } = options;
+
     if (!query || query.trim() === '') {
       return await this.getAllTemplates();
     }
 
+    // 1. Full-Text Search (転置インデックス) - 最優先
+    if ((mode === 'auto' || mode === 'fulltext') && this.indexReady) {
+      console.log(`[Full-Text Search] Query: "${query}"`);
+      const results = this.searchIndex.search(query, {
+        limit,
+        minScore,
+        includeScore
+      });
+
+      if (includeScore) {
+        return results;
+      }
+
+      return results.map(r => r.document);
+    }
+
+    // 2. IndexedDBManagerの最適化メソッド
+    if (mode === 'auto' && typeof this.storage.searchText === 'function') {
+      console.log(`[IndexedDB Search] Query: "${query}"`);
+      return await this.storage.searchText(query, [
+        'name',
+        'description',
+        'tags',
+        'category',
+        'promptTemplate',
+        'contextTemplate'
+      ]);
+    }
+
+    // 3. フォールバック: 従来のフィルタリング
+    console.log(`[Simple Search] Query: "${query}"`);
     const templates = await this.storage.getAll();
     const lowerQuery = query.toLowerCase();
 
@@ -340,6 +496,45 @@ export class TemplateManager {
 
       return nameMatch || descMatch || tagsMatch || categoryMatch;
     });
+  }
+
+  /**
+   * OR検索 (いずれかのキーワードを含む)
+   * @param {string} query - 検索クエリ
+   * @param {Object} options - 検索オプション
+   * @returns {Promise<Array>} マッチしたテンプレート配列
+   */
+  async searchTemplatesOr(query, options = {}) {
+    if (!this.indexReady) {
+      return await this.searchTemplates(query, options);
+    }
+
+    const results = this.searchIndex.searchOr(query, options);
+
+    if (options.includeScore) {
+      return results;
+    }
+
+    return results.map(r => r.document);
+  }
+
+  /**
+   * 前方一致検索
+   * @param {string} prefix - プレフィックス
+   * @param {number} limit - 取得数
+   * @returns {Promise<Array>} マッチしたテンプレート配列
+   */
+  async searchTemplatesPrefix(prefix, limit = 20) {
+    if (!this.indexReady) {
+      // フォールバック
+      const templates = await this.storage.getAll();
+      const lowerPrefix = prefix.toLowerCase();
+      return templates.filter(t =>
+        t.name.toLowerCase().startsWith(lowerPrefix)
+      ).slice(0, limit);
+    }
+
+    return this.searchIndex.searchPrefix(prefix, { limit });
   }
 
   /**

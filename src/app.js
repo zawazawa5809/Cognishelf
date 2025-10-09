@@ -222,18 +222,255 @@ class IndexedDBManager extends StorageInterface {
         return db.get(this.storeName, id);
     }
 
-    // 高度な検索メソッド(オプション)
+    // ========================================
+    // インデックスを活用した高速検索メソッド
+    // ========================================
+
+    /**
+     * タグでインデックス検索 (O(log n))
+     * @param {string} tag - タグ名
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
     async findByTag(tag) {
         const db = await this.dbPromise;
         const index = db.transaction(this.storeName).objectStore(this.storeName).index('tags');
         return index.getAll(tag);
     }
 
+    /**
+     * 日付範囲でインデックス検索 (O(log n))
+     * @param {string} startDate - 開始日 (ISO 8601)
+     * @param {string} endDate - 終了日 (ISO 8601)
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
     async findByDateRange(startDate, endDate) {
         const db = await this.dbPromise;
         const index = db.transaction(this.storeName).objectStore(this.storeName).index('createdAt');
         const range = IDBKeyRange.bound(startDate, endDate);
         return index.getAll(range);
+    }
+
+    /**
+     * カテゴリでインデックス検索 (O(log n))
+     * @param {string} category - カテゴリ名
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
+    async findByCategory(category) {
+        if (!category) return this.getAll();
+
+        const db = await this.dbPromise;
+        const tx = db.transaction(this.storeName);
+        const store = tx.objectStore(this.storeName);
+
+        // categoryインデックスが存在するか確認
+        if (store.indexNames.contains('category')) {
+            const index = store.index('category');
+            return index.getAll(category);
+        }
+
+        // インデックスがない場合はフルスキャン
+        console.warn(`No 'category' index for ${this.storeName}, using full scan`);
+        const items = await store.getAll();
+        return items.filter(item => item.category === category);
+    }
+
+    /**
+     * フォルダでインデックス検索 (O(log n))
+     * @param {string} folder - フォルダ名
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
+    async findByFolder(folder) {
+        if (!folder) return this.getAll();
+
+        const db = await this.dbPromise;
+        const tx = db.transaction(this.storeName);
+        const store = tx.objectStore(this.storeName);
+
+        if (store.indexNames.contains('folder')) {
+            const index = store.index('folder');
+            return index.getAll(folder);
+        }
+
+        console.warn(`No 'folder' index for ${this.storeName}, using full scan`);
+        const items = await store.getAll();
+        return items.filter(item => item.folder === folder);
+    }
+
+    /**
+     * 使用回数でソートして取得 (O(n log n))
+     * @param {number} limit - 取得数
+     * @param {string} order - 'desc' (降順) | 'asc' (昇順)
+     * @returns {Promise<Array>} ソート済みアイテム配列
+     */
+    async findByUsageCount(limit = 10, order = 'desc') {
+        const db = await this.dbPromise;
+        const tx = db.transaction(this.storeName);
+        const store = tx.objectStore(this.storeName);
+
+        if (store.indexNames.contains('usageCount')) {
+            const index = store.index('usageCount');
+            const direction = order === 'desc' ? 'prev' : 'next';
+            const items = [];
+
+            let cursor = await index.openCursor(null, direction);
+            let count = 0;
+
+            while (cursor && count < limit) {
+                items.push(cursor.value);
+                count++;
+                cursor = await cursor.continue();
+            }
+
+            return items;
+        }
+
+        // インデックスがない場合はメモリ上でソート
+        console.warn(`No 'usageCount' index for ${this.storeName}, using in-memory sort`);
+        const items = await store.getAll();
+        items.sort((a, b) => {
+            const aCount = a.usageCount || 0;
+            const bCount = b.usageCount || 0;
+            return order === 'desc' ? bCount - aCount : aCount - bCount;
+        });
+        return items.slice(0, limit);
+    }
+
+    /**
+     * 複数条件でのAND検索 (最適化版)
+     * @param {Object} conditions - { category, folder, tags }
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
+    async findByMultipleConditions(conditions) {
+        const { category, folder, tags } = conditions;
+
+        // 最も選択的なインデックスから開始 (カーディナリティの低い順)
+        let results = null;
+
+        // 1. フォルダで絞り込み (最も選択的)
+        if (folder) {
+            results = await this.findByFolder(folder);
+        }
+        // 2. カテゴリで絞り込み
+        else if (category) {
+            results = await this.findByCategory(category);
+        }
+        // 3. タグで絞り込み
+        else if (tags && tags.length > 0) {
+            results = await this.findByTag(tags[0]);
+        }
+        // 4. フルスキャン
+        else {
+            results = await this.getAll();
+        }
+
+        // 残りの条件でフィルタリング
+        if (category && folder) {
+            results = results.filter(item => item.category === category);
+        }
+
+        if (tags && tags.length > 0) {
+            results = results.filter(item =>
+                item.tags && tags.every(tag => item.tags.includes(tag))
+            );
+        }
+
+        return results;
+    }
+
+    /**
+     * テキスト検索 (複数フィールド横断)
+     * インデックス非対応のためO(n)だが、最適化済み
+     * @param {string} query - 検索クエリ
+     * @param {Array<string>} fields - 検索対象フィールド
+     * @returns {Promise<Array>} マッチしたアイテム配列
+     */
+    async searchText(query, fields = ['title', 'content', 'description']) {
+        if (!query || query.trim() === '') {
+            return this.getAll();
+        }
+
+        const db = await this.dbPromise;
+        const items = await db.getAll(this.storeName);
+        const lowerQuery = query.toLowerCase();
+
+        return items.filter(item => {
+            return fields.some(field => {
+                const value = item[field];
+                if (!value) return false;
+
+                if (typeof value === 'string') {
+                    return value.toLowerCase().includes(lowerQuery);
+                }
+
+                if (Array.isArray(value)) {
+                    return value.some(v =>
+                        typeof v === 'string' && v.toLowerCase().includes(lowerQuery)
+                    );
+                }
+
+                return false;
+            });
+        });
+    }
+
+    /**
+     * ページネーション対応の取得
+     * @param {number} page - ページ番号 (0-based)
+     * @param {number} pageSize - ページサイズ
+     * @param {string} sortBy - ソートフィールド
+     * @param {string} order - 'asc' | 'desc'
+     * @returns {Promise<Object>} { items, total, page, pageSize }
+     */
+    async paginate(page = 0, pageSize = 20, sortBy = 'createdAt', order = 'desc') {
+        const db = await this.dbPromise;
+        const tx = db.transaction(this.storeName);
+        const store = tx.objectStore(this.storeName);
+
+        // 総数を取得
+        const total = await store.count();
+
+        // インデックスがあればカーソルで効率的に取得
+        if (store.indexNames.contains(sortBy)) {
+            const index = store.index(sortBy);
+            const direction = order === 'desc' ? 'prev' : 'next';
+            const items = [];
+
+            let cursor = await index.openCursor(null, direction);
+            let skipCount = page * pageSize;
+            let itemCount = 0;
+
+            // スキップ
+            if (skipCount > 0 && cursor) {
+                cursor = await cursor.advance(skipCount);
+            }
+
+            // 取得
+            while (cursor && itemCount < pageSize) {
+                items.push(cursor.value);
+                itemCount++;
+                cursor = await cursor.continue();
+            }
+
+            return { items, total, page, pageSize };
+        }
+
+        // インデックスがない場合はメモリ上でソート
+        console.warn(`No '${sortBy}' index for ${this.storeName}, using in-memory pagination`);
+        const allItems = await store.getAll();
+
+        allItems.sort((a, b) => {
+            const aVal = a[sortBy];
+            const bVal = b[sortBy];
+
+            if (aVal < bVal) return order === 'asc' ? -1 : 1;
+            if (aVal > bVal) return order === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        const start = page * pageSize;
+        const items = allItems.slice(start, start + pageSize);
+
+        return { items, total, page, pageSize };
     }
 }
 

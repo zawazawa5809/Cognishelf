@@ -100,8 +100,13 @@ export function createTemplate(data = {}) {
  * テンプレートの使用統計を更新
  * @param {Object} template - テンプレート
  * @returns {Object} 更新されたテンプレート
+ * @throws {TypeError} templateがオブジェクトでない場合
  */
 export function incrementTemplateUsage(template) {
+  if (!template || typeof template !== 'object') {
+    throw new TypeError('Template must be a valid object');
+  }
+
   template.usageCount = (template.usageCount || 0) + 1;
   template.updatedAt = new Date().toISOString();
   return template;
@@ -112,17 +117,33 @@ export function incrementTemplateUsage(template) {
  * @param {Object} template - テンプレート
  * @param {number} rating - 評価 (1-5)
  * @returns {Object} 更新されたテンプレート
+ * @throws {TypeError} ratingが数値でない場合
+ * @throws {RangeError} ratingが1-5の範囲外の場合
  */
 export function updateTemplateRating(template, rating) {
+  // 型チェック
+  if (typeof rating !== 'number' || isNaN(rating)) {
+    throw new TypeError('Rating must be a valid number');
+  }
+
+  // 範囲チェック
   if (rating < 1 || rating > 5) {
-    throw new Error('Rating must be between 1 and 5');
+    throw new RangeError('Rating must be between 1 and 5');
   }
 
   // 簡易的な平均計算 (より正確にはratingCountも保持すべき)
   const currentRating = template.rating || 0;
-  const usageCount = template.usageCount || 1;
+  const usageCount = Math.max(template.usageCount || 1, 1); // ゼロ除算ガード
 
-  template.rating = ((currentRating * (usageCount - 1)) + rating) / usageCount;
+  // 安全な計算
+  if (usageCount === 1) {
+    // 初回評価
+    template.rating = rating;
+  } else {
+    // 加重平均計算
+    template.rating = ((currentRating * (usageCount - 1)) + rating) / usageCount;
+  }
+
   template.updatedAt = new Date().toISOString();
 
   return template;
@@ -149,9 +170,15 @@ export function extractVariables(templateText) {
  * テンプレートをバリデーション
  * @param {Object} template - テンプレート
  * @returns {Object} { valid: boolean, errors: Array<string> }
+ * @throws {TypeError} templateがオブジェクトでない場合
  */
 export function validateTemplate(template) {
   const errors = [];
+
+  // 型チェック
+  if (!template || typeof template !== 'object') {
+    throw new TypeError('Template must be a valid object');
+  }
 
   if (!template.name || template.name.trim() === "") {
     errors.push("テンプレート名は必須です");
@@ -165,13 +192,23 @@ export function validateTemplate(template) {
     errors.push("プロンプトテンプレートは必須です");
   }
 
-  // 変数定義とテンプレート内の変数の整合性チェック
-  const extractedVars = extractVariables(template.promptTemplate);
-  const definedVars = new Set(template.variables.map(v => v.name));
+  // 変数配列の型チェック
+  if (!Array.isArray(template.variables)) {
+    errors.push("変数定義は配列である必要があります");
+    return { valid: false, errors };
+  }
 
-  const undefinedVars = extractedVars.filter(v => !definedVars.has(v));
-  if (undefinedVars.length > 0) {
-    errors.push(`未定義の変数が使用されています: ${undefinedVars.join(', ')}`);
+  // 変数定義とテンプレート内の変数の整合性チェック
+  try {
+    const extractedVars = extractVariables(template.promptTemplate);
+    const definedVars = new Set(template.variables.map(v => v.name));
+
+    const undefinedVars = extractedVars.filter(v => !definedVars.has(v));
+    if (undefinedVars.length > 0) {
+      errors.push(`未定義の変数が使用されています: ${undefinedVars.join(', ')}`);
+    }
+  } catch (extractError) {
+    errors.push(`変数抽出エラー: ${extractError.message}`);
   }
 
   return {

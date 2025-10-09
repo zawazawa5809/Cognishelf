@@ -17,36 +17,66 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 基本操作
 
-### 開発・実行
+### 前提条件
+- Node.js 18以上
+
+### 開発環境セットアップ
 ```bash
-# セットアップ不要 - index.htmlをブラウザで直接開く
-# Windows: start index.html
-# または任意のブラウザで開く
+# 依存パッケージのインストール
+npm install
+
+# 開発サーバー起動(推奨)
+npm run dev
+# → http://localhost:3000 が自動で開きます
+
+# プロダクションビルド
+npm run build
+
+# ビルド版のプレビュー
+npm run preview
 ```
 
-このプロジェクトはビルドプロセスやサーバー起動が不要です。HTMLファイルをブラウザで開くだけで動作します。
+**Vite開発環境:**
+- HMR(Hot Module Replacement)対応 - ファイル保存で即座に反映
+- ES Modules対応 - import/export構文使用
+- ソースマップ生成 - デバッグが容易
+- 高速ビルド - Rollupベースの最適化
 
-### ローカルサーバーでの実行(オプション)
-```bash
-# Python 3を使用する場合
-python -m http.server 8000
-
-# Node.jsのhttp-serverを使用する場合
-npx http-server -p 8000
-```
+**レガシー環境(非推奨):**
+ビルドツール不使用の場合は`index.html`を直接ブラウザで開くことも可能ですが、開発時は`npm run dev`の使用を推奨します。
 
 ## コードベースアーキテクチャ
 
 ### ファイル構造
-- **[index.html](index.html)**: アプリケーションのメインHTML - モーダルダイアログとタブUIを含む
-  - `idb` v7 (IndexedDBラッパー) - CDN経由で読み込み
-  - `marked.js` v11 (Markdownパーサー) - CDN経由で読み込み
-- **[app.js](app.js)**: アプリケーションロジック全体 - クラスベース設計
-- **[styles.css](styles.css)**: プロフェッショナルなコーポレート風デザイン
+```
+Cognishelf/
+├── index.html           # メインHTML(モーダル・タブUI)
+├── src/
+│   ├── main.js         # Viteエントリーポイント
+│   ├── app.js          # メインアプリケーションロジック
+│   ├── managers/       # ビジネスロジック層
+│   │   └── TemplateManager.js
+│   └── models/         # データモデル層
+│       ├── PMPrompt.js
+│       ├── PMContext.js
+│       ├── Template.js
+│       └── Project.js
+├── styles.css          # コーポレート風デザイン
+├── public/             # 静的アセット
+├── dist/               # ビルド出力(gitignore)
+├── vite.config.js      # Vite設定
+├── package.json        # 依存関係・スクリプト
+└── ROADMAP.md         # 実装ロードマップ
+```
+
+**レガシーファイル:**
+- ルート直下の`app.js`はレガシー版として残存(Vite移行前)
+- 新規開発は`src/`配下で実施
 
 ### 外部依存関係
-- **idb** (Google製): Promise/async-awaitベースのIndexedDBラッパー
-- **marked.js**: Markdownレンダリングエンジン(プレビュー機能で使用)
+- **idb** v7 (Google製): Promise/async-awaitベースのIndexedDBラッパー
+- **marked** v11: Markdownレンダリングエンジン
+- **vite** v5: 高速ビルドツール&開発サーバー
 
 ### データ管理アーキテクチャ
 
@@ -204,11 +234,16 @@ npx http-server -p 8000
 ## コーディング規約
 
 ### JavaScript
-- クラスベース設計を維持
+- **ES Modules**: `import`/`export`構文を使用(Vite環境)
+- **クラスベース設計**: オブジェクト指向アーキテクチャ
 - **非同期処理**: すべてのデータ操作は`async/await`で実装
-- イベントリスナーは初期化時に `setupEventListeners()` で一括登録
-- DOM操作は必ずXSS対策を実施 (`escapeHtml()` 使用)
-- ストレージ操作は `StorageInterface` 実装クラス(IndexedDBManager/StorageManager)を経由
+- **イベント管理**: 初期化時に`setupEventListeners()`で一括登録
+- **XSS対策**: DOM操作時は必ず`escapeHtml()`を使用
+- **ストレージ抽象化**: `StorageInterface`実装クラス経由でアクセス
+- **モジュール分割**:
+  - `src/models/`: データモデル定義
+  - `src/managers/`: ビジネスロジック
+  - `src/modules/`: 再利用可能なユーティリティ(予定)
 
 ### CSS
 - CSS変数 (`--primary-*`, `--accent-*`) でカラーパレット管理
@@ -246,6 +281,28 @@ npx http-server -p 8000
 
 **初期サンプルデータ:**
 初回起動時のみ `initializeSampleData()` でサンプルデータを自動追加します。既存データがある場合はスキップされます。
+
+## 開発・デバッグ
+
+### デバッグ方法
+```bash
+# 開発サーバー起動(ソースマップ有効)
+npm run dev
+
+# ブラウザDevTools:
+# - Console: エラーログ確認
+# - Application > IndexedDB: データベース確認
+# - Network: API/リソース読み込み確認
+# - Sources: ブレークポイント設定・デバッグ
+```
+
+### テスト
+動作確認チェックリストは[TESTING.md](TESTING.md)を参照してください。
+
+### トラブルシューティング
+- **HMRが動作しない**: ポート3000が使用中の可能性 → `vite.config.js`でポート変更
+- **ビルドエラー**: `node_modules`削除後に`npm install`再実行
+- **IndexedDB初期化失敗**: LocalStorageへ自動フォールバック(コンソール確認)
 
 ## ブラウザ要件
 

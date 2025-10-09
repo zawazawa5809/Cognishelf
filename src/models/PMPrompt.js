@@ -62,13 +62,19 @@ export function createPMPrompt(data = {}) {
  * プロンプトの使用統計を更新
  * @param {Object} prompt - プロンプト
  * @returns {Object} 更新されたプロンプト
+ * @throws {TypeError} promptがオブジェクトでない場合
  */
 export function incrementUsageStats(prompt) {
+  if (!prompt || typeof prompt !== 'object') {
+    throw new TypeError('Prompt must be a valid object');
+  }
+
   if (!prompt.pmConfig) {
     prompt.pmConfig = createDefaultPMConfig();
   }
 
-  prompt.pmConfig.stats.usageCount++;
+  // 安全なインクリメント
+  prompt.pmConfig.stats.usageCount = (prompt.pmConfig.stats.usageCount || 0) + 1;
   prompt.pmConfig.stats.lastUsed = new Date().toISOString();
   prompt.updatedAt = new Date().toISOString();
 
@@ -82,13 +88,31 @@ export function incrementUsageStats(prompt) {
  * @param {string} role - 役割
  * @param {string} email - メールアドレス
  * @returns {Object} 更新されたプロンプト
+ * @throws {TypeError} promptがオブジェクトでない、またはnameが文字列でない場合
  */
 export function addStakeholder(prompt, name, role, email = "") {
+  if (!prompt || typeof prompt !== 'object') {
+    throw new TypeError('Prompt must be a valid object');
+  }
+
+  if (typeof name !== 'string' || name.trim() === '') {
+    throw new TypeError('Stakeholder name must be a non-empty string');
+  }
+
   if (!prompt.pmConfig) {
     prompt.pmConfig = createDefaultPMConfig();
   }
 
-  prompt.pmConfig.stakeholders.push({ name, role, email });
+  // 配列の型チェック
+  if (!Array.isArray(prompt.pmConfig.stakeholders)) {
+    prompt.pmConfig.stakeholders = [];
+  }
+
+  prompt.pmConfig.stakeholders.push({
+    name: name.trim(),
+    role: role || '',
+    email: email || ''
+  });
   prompt.updatedAt = new Date().toISOString();
 
   return prompt;
@@ -100,13 +124,34 @@ export function addStakeholder(prompt, name, role, email = "") {
  * @param {string} title - ドキュメントタイトル
  * @param {string} url - ドキュメントURL
  * @returns {Object} 更新されたプロンプト
+ * @throws {TypeError} promptがオブジェクトでない、またはtitle/urlが文字列でない場合
  */
 export function addRelatedDoc(prompt, title, url) {
+  if (!prompt || typeof prompt !== 'object') {
+    throw new TypeError('Prompt must be a valid object');
+  }
+
+  if (typeof title !== 'string' || title.trim() === '') {
+    throw new TypeError('Document title must be a non-empty string');
+  }
+
+  if (typeof url !== 'string' || url.trim() === '') {
+    throw new TypeError('Document URL must be a non-empty string');
+  }
+
   if (!prompt.pmConfig) {
     prompt.pmConfig = createDefaultPMConfig();
   }
 
-  prompt.pmConfig.relatedDocs.push({ title, url });
+  // 配列の型チェック
+  if (!Array.isArray(prompt.pmConfig.relatedDocs)) {
+    prompt.pmConfig.relatedDocs = [];
+  }
+
+  prompt.pmConfig.relatedDocs.push({
+    title: title.trim(),
+    url: url.trim()
+  });
   prompt.updatedAt = new Date().toISOString();
 
   return prompt;
