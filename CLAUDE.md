@@ -55,18 +55,23 @@ Cognishelf/
 │   ├── main.js         # Viteエントリーポイント
 │   ├── app.js          # メインアプリケーションロジック
 │   ├── managers/       # ビジネスロジック層
-│   │   └── TemplateManager.js
-│   └── models/         # データモデル層
-│       ├── PMPrompt.js
-│       ├── PMContext.js
-│       ├── Template.js
-│       └── Project.js
+│   │   └── TemplateManager.js  # テンプレート管理+Full-Text Search
+│   ├── models/         # データモデル層
+│   │   ├── PMPrompt.js
+│   │   ├── PMContext.js
+│   │   ├── Template.js
+│   │   └── Project.js
+│   └── utils/          # ユーティリティ層
+│       ├── InvertedIndex.js    # 転置インデックス(Full-Text Search)
+│       ├── tokenizer.js        # 日本語対応トークナイザ(Bi-gram)
+│       ├── dateUtils.js        # 日付処理ユーティリティ
+│       └── benchmark.js        # パフォーマンス測定ツール
 ├── styles.css          # コーポレート風デザイン
 ├── public/             # 静的アセット
 ├── dist/               # ビルド出力(gitignore)
 ├── vite.config.js      # Vite設定
 ├── package.json        # 依存関係・スクリプト
-└── ROADMAP.md         # 実装ロードマップ
+└── TESTING.md          # 動作確認チェックリスト
 ```
 
 **レガシーファイル:**
@@ -80,7 +85,7 @@ Cognishelf/
 
 ### データ管理アーキテクチャ
 
-#### ストレージ抽象化層 (app.js:5-169)
+#### ストレージ抽象化層 (src/app.js)
 
 **StorageInterface (抽象クラス)**
 - すべてのストレージマネージャーの共通インターフェース
@@ -103,7 +108,7 @@ Cognishelf/
   - `findByTag(tag)`: タグによるインデックス検索
   - `findByDateRange(start, end)`: 日付範囲検索
 
-**StorageAdapter (app.js:175-230)**
+**StorageAdapter**
 - ストレージマネージャーの自動選択・初期化を担当
 - `createManager(storeName, legacyKey)`:
   1. IndexedDB対応チェック
@@ -111,6 +116,40 @@ Cognishelf/
   3. LocalStorageからの自動マイグレーション
   4. エラー時はLocalStorageへフォールバック
 - `migrateFromLocalStorage()`: 既存データを移行後にLocalStorageクリア
+
+#### Full-Text Search層 (src/utils/)
+
+**InvertedIndex (転置インデックス)** ⭐️ 高速検索エンジン
+- 転置インデックスによるO(k log n)の高速検索(線形探索はO(n×m))
+- データ構造:
+  - `index`: トークン → ドキュメントIDセットのマップ
+  - `documents`: ドキュメントID → ドキュメントのマップ
+  - `documentTokens`: ドキュメントID → トークンセットのマップ
+- 検索モード:
+  - `search()`: AND検索(全トークン含む)
+  - `searchOr()`: OR検索(いずれか含む)
+  - `searchPrefix()`: 前方一致検索
+- 管理機能:
+  - `addDocument()`, `updateDocument()`, `removeDocument()`
+  - `bulkAdd()`: 一括追加で初期化高速化
+  - `export()`, `import()`: JSON形式でのデータ保存/復元
+  - `getStats()`: インデックス統計情報(件数、トークン数、サイズ)
+
+**Tokenizer (日本語対応トークナイザ)**
+- Bi-gram方式による形態素解析不要の日本語トークン化
+- テキスト正規化: 小文字化、全角→半角変換、連続スペース除去
+- ストップワード除去: 日本語100語、英語50語の助詞・冠詞を除外
+- 主要関数:
+  - `tokenize(text)`: テキストをトークン配列に分割
+  - `extractTokens(doc, fields)`: 複数フィールドからトークン抽出
+  - `calculateMatchScore(query, doc)`: マッチングスコア計算(0.0-1.0)
+  - `generatePrefixTokens(text)`: 前方一致用プレフィックス生成
+  - `findMatchPositions(text, tokens)`: ハイライト用マッチ位置検出
+
+**Benchmark (パフォーマンス測定)**
+- `measureTime(fn, label)`: 関数実行時間測定
+- `benchmarkFullTextSearch(manager, query)`: Full-Text vs Simple検索の比較
+- `benchmarkTokenizer(text)`: トークナイザ性能測定
 
 **データ構造:**
 ```javascript
@@ -146,7 +185,7 @@ Cognishelf/
 }
 ```
 
-### アプリケーション状態 - CognishelfApp (app.js:236-948)
+### アプリケーション状態 - CognishelfApp (src/app.js)
 
 メインアプリケーションクラス。SPA全体の状態とUIを管理します。
 
@@ -165,20 +204,36 @@ Cognishelf/
 
 **主要機能ブロック:**
 
-#### タブ切り替え (app.js:171-183)
+#### タブ切り替え
 - タブボタンとコンテンツセクションの表示切り替え
 - `switchTab(tabName)` でactiveクラスを付け替え
 
-#### プロンプト管理 (app.js:185-288)
+#### プロンプト管理
 - `renderPrompts()`: プロンプト一覧のレンダリング
 - `createPromptCard()`: カードHTML生成 (XSS対策済み)
 - `openPromptModal()`: モーダル表示 (新規/編集モード)
 - `savePrompt()`: フォーム送信処理
 - `searchPrompts()`: リアルタイム検索 (タイトル・内容・タグ対象)
 
-#### コンテキスト管理 (app.js:290-392)
+#### コンテキスト管理
 - プロンプトと同様の構造で実装
 - カテゴリ機能がタグ機能と異なる点に注意
+
+#### テンプレート管理 (src/managers/TemplateManager.js)
+- PM業務テンプレートの管理・検索
+- Full-Text Search統合:
+  - 初期化時に転置インデックスを自動構築
+  - CRUD操作時に自動的にインデックス更新
+  - 3段階フォールバック: Full-Text Search → IndexedDB → Simple Search
+- 検索API:
+  - `searchTemplates(query, options)`: 自動モード選択検索
+  - `searchTemplatesOr(query)`: OR検索
+  - `searchTemplatesPrefix(prefix)`: 前方一致検索
+  - `rebuildSearchIndex()`: インデックス再構築
+- テンプレート機能:
+  - 変数置換エンジン(`{{project_name}}`等)
+  - デフォルトテンプレートのロード
+  - カスタムテンプレートの作成・編集
 
 #### フォルダ管理
 - `foldersManager`: フォルダ用ストレージマネージャー
@@ -299,10 +354,29 @@ npm run dev
 ### テスト
 動作確認チェックリストは[TESTING.md](TESTING.md)を参照してください。
 
+### パフォーマンス測定
+```javascript
+// ブラウザDevToolsコンソールで実行
+
+// Full-Text Search vs Simple Search比較
+import { benchmarkFullTextSearch } from './src/utils/benchmark.js';
+await benchmarkFullTextSearch(window.templateManager, '会議議事録');
+
+// インデックス統計情報
+window.templateManager.searchIndex.getStats();
+// → { documentCount, uniqueTokens, avgTokensPerDoc, estimatedSize }
+
+// トークナイザ性能測定
+import { benchmarkTokenizer } from './src/utils/benchmark.js';
+benchmarkTokenizer('プロジェクト管理の議事録を作成する');
+```
+
 ### トラブルシューティング
 - **HMRが動作しない**: ポート3000が使用中の可能性 → `vite.config.js`でポート変更
 - **ビルドエラー**: `node_modules`削除後に`npm install`再実行
 - **IndexedDB初期化失敗**: LocalStorageへ自動フォールバック(コンソール確認)
+- **検索が遅い**: Full-Text Searchインデックス未構築の可能性 → `rebuildSearchIndex()`実行
+- **日本語検索がヒットしない**: ストップワード除去の影響 → `tokenizer.js`のストップワードリスト確認
 
 ## ブラウザ要件
 
@@ -316,48 +390,55 @@ npm run dev
 
 ## 完了済み機能
 
-- ✅ IndexedDB対応 (LocalStorageからの自動マイグレーション)
-- ✅ フォルダ管理 (サイドバーでのフィルタリング)
-- ✅ Markdown対応 (プレビュー&カード表示)
-- ✅ ソート機能 (日付・タイトル)
-- ✅ グループ化機能 (フォルダ・タグ・カテゴリ別)
-- ✅ JSONインポート/エクスポート
-- ✅ プレビューモーダル
+**Phase 0: Vite移行** ✅
+- Vite開発環境構築
+- モジュール分割(src/models/, src/managers/, src/utils/)
+- HMR・ES Modules対応
 
-## 実装計画
+**基本機能** ✅
+- IndexedDB対応 (LocalStorageからの自動マイグレーション)
+- フォルダ管理 (サイドバーでのフィルタリング)
+- Markdown対応 (プレビュー&カード表示)
+- ソート機能 (日付・タイトル)
+- グループ化機能 (フォルダ・タグ・カテゴリ別)
+- JSONインポート/エクスポート
+- プレビューモーダル
 
-詳細は **[ROADMAP.md](ROADMAP.md)** を参照してください。
+**Full-Text Search** ✅
+- 転置インデックス(InvertedIndex)による高速検索
+- 日本語対応Bi-gramトークナイザ
+- AND/OR/前方一致検索
+- パフォーマンス測定ツール
+- TemplateManager統合
 
-### 今後の拡張(ITプロジェクトマネージャー特化)
+## 今後の拡張計画
 
-**Phase 0: Vite移行準備** (1週間) ✅ 完了
-- モダン開発環境構築
-- モジュール分割
-
-**Phase 1: PM特化基盤** (3日間)
+**Phase 1: PM特化基盤**
 - データモデル拡張(pmConfigフィールド追加)
 - プロジェクト情報・ステークホルダー・優先度管理
 
-**Phase 2: テンプレートライブラリ** (1週間)
-- PM業務テンプレート集(会議、ドキュメント、リスク管理等)
-- 変数置換エンジン
+**Phase 2: テンプレートライブラリ強化**
+- PM業務テンプレート集の拡充
+- 変数置換エンジンの改善
+- カテゴリ別テンプレート管理
 
-**Phase 3: プロジェクト管理** (1週間)
+**Phase 3: プロジェクト管理**
 - 複数プロジェクトの管理・切り替え
 - ダッシュボード・進捗可視化
 
-**Phase 4: AI連携強化** (1週間)
+**Phase 4: AI連携強化**
 - Claude/ChatGPT連携最適化
 - プロンプト+コンテキスト一括コピー
 - AI応答の保存・関連付け
 
-**Phase 5: 高度な機能** (2週間)
+**Phase 5: 検索機能強化**
+- ファジー検索(タイポ補正)
+- TF-IDF/BM25ランキング
+- 検索結果ハイライト
+- Web Workers対応
+
+**Phase 6: 高度な機能**
 - ナレッジベース・関連性マップ
 - バージョン管理・差分表示
 - チーム共有機能
-
-### 将来の検討事項
-- お気に入り機能
 - ダークモードテーマ
-- キーボードショートカット拡張
-- チームでのテンプレート共有
